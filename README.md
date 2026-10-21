@@ -3,6 +3,12 @@
 Pixel Gridiron is an original retro arcade-football and team-management game. It runs on HTML5 Canvas with plain JavaScript ES modules: no frameworks, no build step and no CDNs, so it works fully offline.
 The game recreates the loop of a classic mobile retro-football title. Everything in it is original: the name, the pixel art drawn in code, the bitmap font, the Web Audio sounds, and every team, city and player name.
 
+## Play it
+
+**https://ybelov27.github.io/pixel-gridiron/**
+
+It plays in landscape on iPhone, iPad, Android and desktop. On iPhone or iPad, open the link in Safari, then choose **Share → Add to Home Screen**. That gives you a fullscreen app icon that keeps working offline. The game fills the whole screen at a crisp integer pixel scale and keeps the HUD clear of the notch.
+
 ## Run it
 
 Serve the folder from any static server, then open http://localhost:8000.
@@ -26,6 +32,7 @@ ES modules don't load from `file://`, so you need a server. Your career autosave
 | Bullet pass | Second finger tap, or right-click while aiming (a right-button drag starts as a bullet) | B / Shift while aiming |
 | QB scramble | Drag **forward** and release | – |
 | Hand-off | Tap the RB inside the flashing ring | H |
+| Kick return | Tap to bring it out of the end zone (or wait for a touchback), then swipe to juke | Space, then WASD |
 | Juke | Swipe up / down | W / S, ↑ / ↓ |
 | Stutter (slow) | Swipe back | A / ← |
 | Dive | Swipe forward | D / → |
@@ -38,7 +45,9 @@ The play is chosen for you, and each receiver's route is drawn as a dotted line 
 
 ## What's in it
 
-- **On field:** 11 v 11 side-scrolling field. Routes, man and deep-zone coverage with reaction lag, a pass rush against your OL, sacks, catches, drops, deflections and interceptions. Also hand-offs, jukes, stutters, dives, broken tackles, fumbles, safeties, out of bounds, 26 auto-selected plays, a FG/PAT aim and power mini-game with wind, punts, kickoffs, onside kicks, 2-point tries and 4th-down decisions. Opponent drives are simulated as a ticker.
+- **Look:** a chunky outlined 5×7 pixel font, outlined player sprites with helmet stripes and run cycles, crowd stands that bounce on big plays, end zones with team names, a midfield logo, a scoreboard HUD, a TOUCHDOWN banner with confetti, screen shake, dust, floating yardage, and weather (snow late in the season at cold-weather stadiums, rain) and night games.
+- **Ratings:** every player has an overall rating (OVR, 40–99). It shows over skill players and defenders on the field, and in the roster, player cards, free agency and the draft.
+- **On field:** 11 v 11 side-scrolling field. Routes, man and deep-zone coverage with reaction lag, a pass rush against your OL, sacks, catches, drops, deflections and interceptions. When a pass is in the air, every nearby receiver and defender breaks toward the landing spot. Also playable kickoff returns, hand-offs, jukes, stutters, dives, broken tackles, fumbles, safeties, out of bounds, 26 auto-selected plays, a FG/PAT aim and power mini-game with wind, punts, kickoffs, onside kicks, 2-point tries and 4th-down decisions. Opponent drives are simulated as a ticker.
 - **Rules:** selectable 1/2/3-minute quarters, a clock that stops on incompletions, out of bounds, scores and turnovers, a 6-second runoff between plays, 3 timeouts per half, and OT (see Known deviations).
 - **Management:** 32 fictional teams in 2 conferences of 4 divisions each, a 16-game season, and a 12-team playoff ending in the Pixel Bowl. Your roster holds up to 12 star players, each with 4 position attributes, a star rating and potential, XP and skill points, morale, condition, injuries, contracts, and season and career stats. You earn coaching credits and spend them on Stadium, Training and Rehab upgrades (which decay each offseason), OC/DC hires, meetings, rest, extensions, free agents and cap raises. There's a $200M salary cap, a 3-round draft with scouting fuzz, free agency, re-signing, trades and releases, press conferences and events, an owner job-security meter with firing and new job offers, and Easy/Medium/Hard/Extreme difficulty plus an optional dynamic difficulty.
 
@@ -86,6 +95,7 @@ src/flow.js           season flow shared by UI and tests
 src/save.js           localStorage + JSON export/import
 src/scenes/game.js    on-field rendering + gesture handling
 src/scenes/menus.js   every menu screen
+sw.js, manifest.webmanifest, icons/   installable offline app (icons made by tools/make-icons.mjs)
 tests/                Node tests + browser smoke driver
 ```
 
@@ -95,9 +105,9 @@ tests/                Node tests + browser smoke driver
 
 - **Overtime** follows the 2010–2021 NFL rule. A TD on the first possession wins, otherwise both teams get the ball, then it's sudden death. Regular-season OT is one period and can end tied, while playoff OT repeats until someone wins.
 - **CPU teams** have only offense and defense ratings, not full rosters. When you're hired by a new club, it gets a generated roster that fits its ratings.
-- **Kickoff and punt returns** are resolved automatically. You don't control the returner, and interception and fumble returns are a random 0–15 yards.
+- **Punt returns** and interception/fumble returns are resolved automatically (a random 0–15 yards). Kickoff returns are playable.
 - **The draft** shows a fresh 7-player pool each round. CPU teams don't draft from your pool.
 - **Defense** is never playable, as in the original. Your defensive stars collect tackles, sacks and INTs from the drive simulation.
 - **Economy numbers** (CC rewards and costs, salaries, decay) are best guesses, marked ASSUMED in RESEARCH.md.
-- **Scaling** uses integer device-pixel multiples, so some screens show a letterbox margin.
+- **Menus** are laid out in a 384×216 area centred on screen. On iPad and wider phones the background fills the rest.
 - **No multiplayer** and no exhibition mode.

@@ -28,6 +28,8 @@ export function makeDefender(rating, i, rng) {
 export class PlaySim {
   constructor(o) {
     this.o = o;
+    this.wx = o.weather === 'rain' ? 0.05 : o.weather === 'snow' ? 0.06 : 0; // slick ball
+    if (o.mode === 'return') return this.setupReturn(o);
     const { play, lineup, defRating, losX, ballY, diff, rng } = o;
     this.play = play; this.rng = rng; this.diff = diff; this.los = losX; this.by = ballY;
     this.t = 0; this.started = false; this.done = false; this.endTimer = 0; this.result = null;
@@ -136,9 +138,14 @@ export class PlaySim {
     this.events.push('throw');
     // intended receivers break to the ball
     const L = { x: this.ball.x1, y: this.ball.y1 };
-    const rs = this.receivers.filter((r) => !r.block && !(r.run)).sort((a, b) => dist(a, L) - dist(b, L)).slice(0, 2);
-    rs.forEach((r) => { if (dist(r, L) < 10) { r.toBall = true; r.toBallAt = this.t + 0.22; } });
-    for (const dd of this.defs) if (!dd.engaged && !dd.rush && dist(dd, L) < (bullet ? 6 : 11)) dd.toBallAt = this.t + dd.react + (bullet ? 0.3 : 0.35);
+    // everyone in the area breaks toward where the ball will come down
+    const rs = this.receivers.filter((r) => !r.block && !(r.run)).sort((a, b) => dist(a, L) - dist(b, L));
+    rs.forEach((r, i) => { const d = dist(r, L); if (d < (i < 2 ? 16 : 25)) { r.toBall = true; r.toBallAt = this.t + 0.22 + i * 0.08; r.toBallLead = i < 2; } });
+    for (const dd of this.defs) {
+      if (dd.engaged || dd.rush || dd.role === 'DL') continue;
+      const d = dist(dd, L);
+      if (d < 25) dd.toBallAt = this.t + dd.react + (bullet ? 0.3 : 0.35) + Math.max(0, d - (bullet ? 6 : 11)) * 0.02;
+    }
     return true;
   }
   scramble() {
@@ -158,6 +165,7 @@ export class PlaySim {
 
   // ----- simulation -----
   update(dt) {
+    if (this.mode === 'return') return this.updateReturn(dt);
     if (!this.started) return;
     if (this.done) return;
     if (this.result) { this.endTimer -= dt; this.animate(dt); if (this.endTimer <= 0) this.done = true; return; }
@@ -325,7 +333,7 @@ export class PlaySim {
     if (this.result) return;
     if (c.x >= 110 && c.y > 0 && c.y < FW) return this.end({ kind: 'td', x: c.x, y: c.y, msg: 'TOUCHDOWN!' });
     if (c.y <= 0 || c.y >= FW) {
-      if (c.x < 10) return this.end({ kind: 'safety', x: c.x, y: c.y, msg: 'SAFETY!' });
+      if (c.x < 10) return this.end(this.mode === 'return' ? { kind: 'touchback', x: 10, y: c.y, msg: 'TOUCHBACK' } : { kind: 'safety', x: c.x, y: c.y, msg: 'SAFETY!' });
       return this.end({ kind: 'oob', x: c.x, y: clamp(c.y, 0, FW), msg: 'OUT OF BOUNDS', stop: true });
     }
   }
@@ -350,12 +358,12 @@ export class PlaySim {
       // tackle
       c.down = true;
       const sack = !this.carrier && c === this.QB;
-      let pF = c.diving ? 0 : 0.012 + (ct - cs) * 0.003 + this.diff.contest * 0.02 + (sack ? 0.04 : 0);
+      let pF = c.diving ? 0 : 0.012 + (ct - cs) * 0.003 + this.diff.contest * 0.02 + (sack ? 0.04 : 0) + this.wx * 0.2;
       if (this.rng.chance(Math.max(0, pF))) {
         const lost = this.rng.chance(0.55);
         return this.end({ kind: lost ? 'fumble' : 'tackle', x: c.x, y: c.y, msg: lost ? 'FUMBLE! LOST' : 'FUMBLE! RECOVERED', stop: lost, sack, fumble: true });
       }
-      if (c.x < 10) return this.end({ kind: 'safety', x: c.x, y: c.y, msg: 'SAFETY!' });
+      if (c.x < 10) return this.end(this.mode === 'return' ? { kind: 'touchback', x: 10, y: c.y, msg: 'TOUCHBACK' } : { kind: 'safety', x: c.x, y: c.y, msg: 'SAFETY!' });
       return this.end({ kind: 'tackle', x: c.x, y: c.y, msg: sack ? 'SACKED!' : 'TACKLED', sack });
     }
   }
@@ -386,7 +394,7 @@ export class PlaySim {
     this.lastCatch = { dR, dD, rIn, dIn, pressure };
     if (outB) return this.incomplete('INCOMPLETE - OUT');
     if (rIn) {
-      const pCatch = clamp(0.76 + cat * 0.024 - dR * 0.16 - Math.min(0.45, (b.err || 0) * 0.075) - pressure * (0.42 + this.diff.contest) - (b.bullet && b.T < 0.5 ? 0.05 : 0), 0.06, 0.97);
+      const pCatch = clamp(0.76 - this.wx + cat * 0.024 - dR * 0.16 - Math.min(0.45, (b.err || 0) * 0.075) - pressure * (0.42 + this.diff.contest) - (b.bullet && b.T < 0.5 ? 0.05 : 0), 0.06, 0.97);
       if (rng.chance(pCatch)) return this.catchBy(R);
       if (pressure > 0.6 && rng.chance((pressure - 0.6) * 0.4 + cov * 0.006 + this.diff.contest * 0.3)) return this.intercept(Dd);
       return this.incomplete(pressure > 0.35 ? 'BROKEN UP!' : 'DROPPED!', true);
@@ -424,4 +432,89 @@ export class PlaySim {
     this.events.push(r.kind === 'td' ? 'td' : r.kind === 'incomplete' ? 'whistle' : 'tackle');
     for (const e of this.ents) if (e !== this.carrier) { e.vx *= 0.3; e.vy *= 0.3; }
   }
+  // ---------------- kickoff return ----------------
+  setupReturn(o) {
+    const { lineup, defRating, diff, rng } = o;
+    this.mode = 'return'; this.rng = rng; this.diff = diff; this.play = { name: 'KICKOFF RETURN', type: 'return', f: 'return' };
+    this.t = 0; this.started = true; this.done = false; this.endTimer = 0; this.result = null;
+    this.events = []; this.ents = []; this.handed = false; this.thrown = false; this.carrier = null; this.carrierKind = null;
+    this.los = 10; this.by = FW / 2;
+    const add = (side, role, p, x, y) => {
+      const e = { side, role, p, x, y: clamp(y, 1.5, FW - 1.5), vx: 0, vy: 0, stun: 0, cd: 0, trail: [], anim: 0, down: false, star: !p.regular };
+      e.spd = spdOf(eff(p, 'SPD')) + (side === 'def' ? diff.spd * 0.6 : 0);
+      this.ents.push(e); return e;
+    };
+    // the fastest skill player returns it
+    const cands = [...lineup.RB, ...lineup.WR].sort((a, b) => (b.attrs.SPD || 0) - (a.attrs.SPD || 0));
+    this.landX = 10 + rng.range(-6, 7); this.landY = FW / 2 + rng.range(-9, 9);
+    this.KR = add('off', 'KR', cands[0], this.landX - 4, this.landY);
+    const blockers = [...lineup.OL, ...lineup.TE, ...lineup.WR.slice(1), lineup.RB[0] === cands[0] ? lineup.WR[0] : lineup.RB[0]].slice(0, 10);
+    this.blk = blockers.map((p, i) => add('off', 'BLK', p, 24 + (i % 2) * 6 + rng.range(0, 3), 5 + i * (FW - 10) / 9));
+    this.defs = [];
+    for (let i = 0; i < 11; i++) {
+      const d = add('def', 'COV', makeDefender(defRating, i, rng), 74 + rng.range(-1, 1), 3 + i * (FW - 6) / 10);
+      d.react = 0.1; d.lane = d.y; this.defs.push(d);
+    }
+    // each blocker picks the coverage man in his lane
+    const free = this.defs.slice();
+    for (const b of this.blk) { free.sort((a, c) => Math.abs(a.y - b.y) - Math.abs(c.y - b.y)); b.target = free.shift(); }
+    this.receivers = [];
+    this.QB = this.KR; // renderers/helpers that reference QB fall back to the returner
+    this.ball = { state: 'kick', x0: 75, y0: FW / 2, x1: this.landX, y1: this.landY, t: 0, T: 2.4, peak: 16, x: 75, y: FW / 2, z: 0.5 };
+    this.awaitReturn = false; this.decided = false;
+  }
+  returnBall() { // user taps to bring it out of the end zone
+    if (this.mode !== 'return' || this.decided) return false;
+    this.decided = true; this.wantReturn = true;
+    if (this.awaitReturn) { this.awaitReturn = false; this.setCarrier(this.KR, 'kr'); }
+    return true;
+  }
+  updateReturn(dt) {
+    if (this.done) return;
+    if (this.result) { this.endTimer -= dt; this.animate(dt); if (this.endTimer <= 0) this.done = true; return; }
+    this.t += dt;
+    const b = this.ball, kr = this.KR;
+    if (b.state === 'kick') {
+      b.t += dt; const u = Math.min(1, b.t / b.T);
+      b.x = b.x0 + (b.x1 - b.x0) * u; b.y = b.y0 + (b.y1 - b.y0) * u; b.z = 0.5 + 4 * b.peak * u * (1 - u) + (1.3 - 0.5) * u;
+      this.moveTo(kr, b.x1, b.y1, kr.spd, dt);
+      if (u >= 1) {
+        this.events.push('catch');
+        if (b.x1 < 10 && !this.wantReturn) { this.awaitReturn = true; this.awaitUntil = this.t + 1.1; b.state = 'carried'; this.carrier = null; }
+        else this.setCarrier(kr, 'kr');
+      }
+    }
+    if (this.awaitReturn) {
+      this.moveTo(kr, kr.x, kr.y, 0, dt);
+      if (this.t >= this.awaitUntil) { kr.down = true; this.decided = true; return this.end({ kind: 'touchback', x: 10, y: kr.y, msg: 'TOUCHBACK', stop: true }); }
+    }
+    if (this.carrier) this.runCarrier(this.carrier, dt);
+    // blockers: run at their man, then hold him up
+    for (const bl of this.blk) {
+      const d = bl.target;
+      if (!d) continue;
+      if (d.held && d.stun > 0) { bl.x = d.x - 0.7; bl.y += (d.y - bl.y) * Math.min(1, dt * 8); bl.vx = -0.3; continue; }
+      if (d.held && d.stun <= 0) { d.held = false; bl.target = null; continue; }
+      this.moveTo(bl, d.x - 0.6, d.y, bl.spd * 0.95, dt);
+      if (dist(bl, d) < 1.1) {
+        d.held = true;
+        d.stun = clamp(1.0 + (eff(bl.p, 'STR') + (eff(bl.p, 'BLK') || 3) - eff(d.p, 'STR') * 2) * 0.12 + this.rng.range(-0.3, 0.9) - this.diff.contest * 2, 0.4, 2.8);
+      }
+    }
+    if (!this.carrier && !this.awaitReturn) {
+      // lone returner fielding the ball: blockers have already set up, keep everyone moving
+    }
+    // coverage: sprint down their lanes, then converge on the ball / carrier
+    for (const d of this.defs) {
+      if (d.stun > 0) { d.stun -= dt; if (!d.held) { d.vx = d.vy = 0; } continue; }
+      const tgt = this.carrier || kr;
+      if (Math.abs(d.x - tgt.x) > 18) this.moveTo(d, tgt.x, d.lane + (tgt.y - d.lane) * 0.35, d.spd, dt);
+      else this.pursue(d, tgt, dt);
+    }
+    for (const e of this.ents) { if (e.cd > 0) e.cd -= dt; if (e.cd2 > 0) e.cd2 -= dt; }
+    if (this.carrier && !this.result) this.contacts();
+    this.animate(dt);
+    if (this.t > 25 && !this.result) this.end({ kind: 'tackle', x: (this.carrier || kr).x, y: kr.y, msg: 'WHISTLE' });
+  }
+
 }

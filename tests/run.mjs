@@ -115,6 +115,23 @@ test('overtime resolves', () => {
   assert.ok(m.q >= 5, 'should have gone to OT');
 });
 
+test('kickoff returns produce realistic field position', () => {
+  const lu = buildLineup([]);
+  const res = { n: 0, yd: 0, td: 0, tb: 0, fum: 0 };
+  for (let s = 1; s <= 400; s++) {
+    const sim = new PlaySim({ mode: 'return', lineup: lu, defRating: 2.3, diff: { sim: 0, react: 0, spd: 0, contest: 0, cpu: 0 }, rng: new RNG(s) });
+    if (s % 2) sim.returnBall();
+    for (let i = 0; i < 60 * 30 && !sim.done; i++) { if (sim.carrier && i % 50 === 0) sim.juke(i % 100 ? 1 : -1); sim.update(1 / 60); }
+    const r = sim.result; assert.ok(r, 'return produced no result');
+    res.n++;
+    if (r.kind === 'td') res.td++; else if (r.kind === 'touchback') res.tb++; else if (r.kind === 'fumble') res.fum++; else res.yd += r.x - 10;
+  }
+  const live = res.n - res.td - res.tb - res.fum;
+  console.log(`      ${res.n} kicks: avg start yd ${(res.yd / live).toFixed(1)}, TD ${res.td}, touchbacks ${res.tb}, fumbles ${res.fum}`);
+  assert.ok(res.yd / live > 15 && res.yd / live < 40, 'average return should land between own 15 and 40');
+  assert.ok(res.td / res.n < 0.06, 'return TDs should be rare');
+});
+
 // ---------------------------------------------------------------- 3. two seasons + save round trip
 function runCareer(c, seasons, forceFire) {
   const startYear = c.year; let guard = 0; let fired = false; let drafted = 0;

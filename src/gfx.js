@@ -1,25 +1,51 @@
-// Low-res canvas, integer scaling, bitmap font and procedural sprites.
-export const W = 384, H = 216;
+// Low-res canvas that fills the screen at an integer device-pixel scale, bitmap fonts and procedural sprites.
+// BW x BH is the guaranteed minimum logical area (menus are laid out in it); W x H grow to fill the screen.
+export const BW = 384, BH = 216;
+export let W = BW, H = BH, SCALE = 1;
+export const SAFE = { l: 0, r: 0, t: 0, b: 0 }; // notch / home-indicator insets in logical px
+export let PORTRAIT = false;
 export let ctx = null;
-let canvas = null;
+let canvas = null, probe = null;
+const MAX_W = 560, MAX_H = 320;
 
 export function initCanvas(c) {
   canvas = c;
-  canvas.width = W; canvas.height = H;
-  ctx = canvas.getContext('2d');
-  ctx.imageSmoothingEnabled = false;
+  probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
+    'padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+  document.body.appendChild(probe);
   resize();
   addEventListener('resize', resize);
-  addEventListener('orientationchange', () => setTimeout(resize, 200));
+  addEventListener('orientationchange', () => { setTimeout(resize, 120); setTimeout(resize, 500); });
+  if (window.visualViewport) visualViewport.addEventListener('resize', resize);
 }
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  const fit = Math.min(innerWidth * dpr / W, innerHeight * dpr / H);
-  // integer scale in device pixels when possible (crisp), fractional fallback for tiny screens
-  const s = fit >= 1 ? Math.floor(fit) : fit;
-  canvas.style.width = (W * s / dpr) + 'px';
-  canvas.style.height = (H * s / dpr) + 'px';
+  const vw = innerWidth, vh = innerHeight;
+  const dw = Math.round(vw * dpr), dh = Math.round(vh * dpr);
+  PORTRAIT = vh > vw * 1.05;
+  // in portrait, lay the game out as if the phone were rotated so the scale matches landscape
+  const fw = PORTRAIT ? Math.max(dw, dh) : dw, fh = PORTRAIT ? Math.min(dw, dh) : dh;
+  let s = Math.floor(Math.min(fw / BW, fh / BH));
+  if (s < 1) s = Math.min(fw / BW, fh / BH); // tiny window: fractional fallback
+  let w = Math.floor(dw / s), h = Math.floor(dh / s);
+  while (!PORTRAIT && (w > MAX_W || h > MAX_H) && s >= 1) { s++; w = Math.floor(dw / s); h = Math.floor(dh / s); }
+  if (!PORTRAIT && (w < BW || h < BH)) { s = Math.max(1, s - 1); w = Math.floor(dw / s); h = Math.floor(dh / s); }
+  w = Math.max(BW, Math.min(PORTRAIT ? 2000 : MAX_W, w)); h = Math.max(PORTRAIT ? 1 : BH, Math.min(PORTRAIT ? 2000 : MAX_H, h));
+  SCALE = s;
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  W = w; H = h;
+  ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  canvas.style.width = (w * s / dpr) + 'px';
+  canvas.style.height = (h * s / dpr) + 'px';
+  const cs = getComputedStyle(probe), k = dpr / s;
+  SAFE.t = Math.ceil(parseFloat(cs.paddingTop) * k) || 0; SAFE.r = Math.ceil(parseFloat(cs.paddingRight) * k) || 0;
+  SAFE.b = Math.ceil(parseFloat(cs.paddingBottom) * k) || 0; SAFE.l = Math.ceil(parseFloat(cs.paddingLeft) * k) || 0;
 }
+// top-left of the centered BW x BH layout box used by menus
+export function boxX() { return Math.floor((W - BW) / 2); }
+export function boxY() { return Math.floor((H - BH) / 2); }
 export function getCanvas() { return canvas; }
 
 // ---------- bitmap font (3x5 glyphs, 4x6 cell) ----------
@@ -99,10 +125,15 @@ export function line(x0, y0, x1, y1, c, dotted = 0, phase = 0) {
     ctx.fillRect(Math.round(x0 + dx * t), Math.round(y0 + dy * t), 1, 1);
   }
 }
-export function panel(x, y, w, h, bg = '#1a1c2c', border = '#f4f4f4') {
-  rect(x, y, w, h, bg); frame(x, y, w, h, border); frame(x + 1, y + 1, w - 2, h - 2, '#000');
+export function panel(x, y, w, h, bg = THEME_PANEL, border = null) {
+  x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
+  rect(x + 2, y + 2, w, h, 'rgba(0,0,0,0.35)');             // drop shadow
+  rect(x, y, w, h, '#0b0d1c');                              // outline
+  rect(x + 1, y + 1, w - 2, h - 2, bg);
+  rect(x + 1, y + 1, w - 2, 1, border || 'rgba(255,255,255,0.18)');  // top highlight
+  rect(x + 1, y + h - 2, w - 2, 1, 'rgba(0,0,0,0.3)');      // bottom lowlight
 }
-
+const THEME_PANEL = '#232a55';
 // ---------- star icons ----------
 const STAR = ['00100', '01110', '11111', '01110', '01010'];
 export function starIcon(x, y, c = '#ffcd34') {
@@ -124,28 +155,150 @@ export function bar(x, y, w, h, v, max, c = '#38b764', bg = '#333c57') {
   rect(x, y, w, h, bg); rect(x, y, Math.max(0, Math.round(w * Math.min(1, v / max))), h, c);
 }
 
-// ---------- player sprites (7x11) ----------
-const FRAMES = [
-  ['..hhh..', '.hhhhm.', '.hhssm.', '..jjj..', '.jjnjj.', 'sjjnjjs', '.jjjjj.', '..ppp..', '..p.p..', '.l...l.', 'bb...bb'],
-  ['..hhh..', '.hhhhm.', '.hhssm.', '..jjj..', '.jjnjj.', 'sjjnjjs', '.jjjjj.', '..ppp..', '...pp..', '...ll..', '...bb..'],
-  // down / tackled (lying)
-  ['.......', '.......', '.......', '.......', '.......', '.......', '.......', 'hhjjjpl', 'hsjnjpb', '.......', '.......'],
+// ---------- big bold font (5x7 glyphs) ----------
+const B = {
+  A:'01110100011000111111100011000110001',B:'11110100011000111110100011000111110',C:'01110100011000010000100001000101110',
+  D:'11110100011000110001100011000111110',E:'11111100001000011110100001000011111',F:'11111100001000011110100001000010000',
+  G:'01110100011000010111100011000101111',H:'10001100011000111111100011000110001',I:'01110001000010000100001000010001110',
+  J:'00111000100001000010000101001001100',K:'10001100101010011000101001001010001',L:'10000100001000010000100001000011111',
+  M:'10001110111010110101100011000110001',N:'10001100011100110101100111000110001',O:'01110100011000110001100011000101110',
+  P:'11110100011000111110100001000010000',Q:'01110100011000110001101011001001101',R:'11110100011000111110101001001010001',
+  S:'01111100001000001110000010000111110',T:'11111001000010000100001000010000100',U:'10001100011000110001100011000101110',
+  V:'10001100011000110001100010101000100',W:'10001100011000110101101011010101010',X:'10001100010101000100010101000110001',
+  Y:'10001100011000101010001000010000100',Z:'11111000010001000100010001000011111',
+  '0':'01110100011001110101110011000101110','1':'00100011000010000100001000010001110','2':'01110100010000100010001000100011111',
+  '3':'11111000100010000010000011000101110','4':'00010001100101010010111110001000010','5':'11111100001111000001000011000101110',
+  '6':'00110010001000011110100011000101110','7':'11111000010001000100010000100001000','8':'01110100011000101110100011000101110',
+  '9':'01110100011000101111000010001001100','.':'00000000000000000000000000110001100',',':'00000000000000000000011000010001000',
+  ':':'00000011000110000000011000110000000','!':'00100001000010000100001000000000100','?':'01110100010000100010001000000000100',
+  '-':'00000000000000011111000000000000000','+':'00000001000010011111001000010000000','/':'00000000010001000100010001000000000',
+  "'":'00100001000100000000000000000000000','(':'00010001000100001000010000010000010',')':'01000001000001000010000100010001000',
+  '%':'11000110010001000100010001001100011','$':'00100011111010001110001011111000100','#':'01010010101111101010111110101001010',
+  '*':'00000001001010101110101010010000000','<':'00010001000100010000010000010000010','>':'01000001000001000001000100010001000',
+  '=':'00000000001111100000111110000000000','&':'01100100101010001000101011001001101','_':'00000000000000000000000000000011111',
+  '^':'00100010101000100000000000000000000','[':'01110010000100001000010000100001110',']':'01110000100001000010000100001001110',
+  '"':'01010010100101000000000000000000000','|':'00100001000010000100001000010000100',' ':'00000000000000000000000000000000000',
+};
+const BCH = Object.keys(B), bidx = {}; BCH.forEach((c, i) => bidx[c] = i);
+const bigCache = new Map();
+function bigAtlas(color, bold) {
+  const key = color + bold;
+  let c = bigCache.get(key);
+  if (c) return c;
+  const cw = bold ? 6 : 5;
+  c = document.createElement('canvas'); c.width = BCH.length * cw; c.height = 7;
+  const x = c.getContext('2d'); x.fillStyle = color;
+  BCH.forEach((ch, i) => { const g = B[ch];
+    for (let r = 0; r < 7; r++) for (let k = 0; k < 5; k++) if (g[r * 5 + k] === '1') { x.fillRect(i * cw + k, r, bold ? 2 : 1, 1); } });
+  bigCache.set(key, c);
+  return c;
+}
+export function bigWidth(s, scale = 1, bold = true) { return (String(s).length * (bold ? 7 : 6) - 1) * scale; }
+// chunky outlined text, the main display font
+export function big(s, x, y, color = '#fff', o = {}) {
+  s = String(s).toUpperCase();
+  const scale = o.scale || 1, bold = o.bold !== false, adv = (bold ? 7 : 6) * scale, cw = bold ? 6 : 5;
+  const wpx = bigWidth(s, scale, bold);
+  if (o.align === 'center') x -= Math.floor(wpx / 2); else if (o.align === 'right') x -= wpx;
+  x = Math.round(x); y = Math.round(y);
+  const draw = (col, dx, dy) => { const a = bigAtlas(col, bold);
+    for (let i = 0; i < s.length; i++) { const j = bidx[s[i]]; if (j === undefined || s[i] === ' ') continue;
+      ctx.drawImage(a, j * cw, 0, cw, 7, x + i * adv + dx, y + dy, cw * scale, 7 * scale); } };
+  const oc = o.outline === undefined ? '#0b0d1c' : o.outline;
+  if (o.shadow !== false && oc) draw(oc, 0, scale + (o.outline === null ? 0 : 1));
+  if (oc) for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) draw(oc, dx, dy);
+  draw(color, 0, 0);
+}
+
+// ---------- icons (9x9) ----------
+const ICONS = {
+  team: ['..ooooo..', '.ohhhhho.', 'ohhhhhmmo', 'ohhhhhm.o', 'ohhhhhmmo', '.ohhhho..', '..oooo...', '.........', '.........'],
+  office: ['.........', '..ooooo..', '..o...o..', 'ooooooooo', 'o.......o', 'o...o...o', 'o.......o', 'ooooooooo', '.........'],
+  sign: ['....o....', '...ooo...', '....o....', '..ooooo..', '.o.....o.', 'o..o.o..o', 'o.......o', '.o.ooo.o.', '..ooooo..'],
+  sched: ['.o.....o.', 'ooooooooo', 'o.......o', 'o.o.o.o.o', 'o.......o', 'o.o.o.o.o', 'o.......o', 'ooooooooo', '.........'],
+  table: ['ooooooooo', 'o..o....o', 'ooooooooo', 'o..o....o', 'ooooooooo', 'o..o....o', 'ooooooooo', '.........', '.........'],
+  bracket: ['ooo......', '..o......', '..ooo....', '..o.o....', 'ooo.oooo.', '....o....', 'ooo.o....', '..ooo....', '.........'],
+  trophy: ['ooooooooo', 'o.ooooo.o', 'o.ooooo.o', '.oooooo..', '..ooooo..', '...ooo...', '....o....', '..ooooo..', '.........'],
+  gear: ['...ooo...', '.o.ooo.o.', '.ooo.ooo.', 'ooo...ooo', 'oo.....oo', 'ooo...ooo', '.ooo.ooo.', '.o.ooo.o.', '...ooo...'],
+  coin: ['..ooooo..', '.oyyyyyo.', 'oyyoooyyo', 'oyyoyyyyo', 'oyyoyyyyo', 'oyyoooyyo', '.oyyyyyo.', '..ooooo..', '.........'],
+  news: ['ooooooo..', 'o.....oo.', 'o.ooo.o.o', 'o.....o.o', 'o.ooo.o.o', 'o.....o.o', 'oooooooo.', '.........', '.........'],
+};
+export function icon(name, x, y, color = '#fff') {
+  const g = ICONS[name]; if (!g) return;
+  for (let r = 0; r < 9; r++) for (let k = 0; k < 9; k++) {
+    const ch = g[r][k]; if (ch === '.') continue;
+    ctx.fillStyle = ch === 'y' ? '#ffd23f' : ch === 'h' ? color : ch === 'm' ? '#c0c0c0' : color;
+    ctx.fillRect(Math.round(x) + k, Math.round(y) + r, 1, 1);
+  }
+}
+
+// ---------- player sprites: fill art auto-outlined -> 10x16 ----------
+// h helmet, s helmet stripe, l logo, m facemask, f face, j jersey, n number band, a arm, p pants, k socks, b shoes
+const BODY = [
+  '..ssss..', '.hhhhhh.', 'hhhhlhhm', 'hhhhhfmm', '.hhhffm.', '..jjff..', '.jjjjjj.', 'jjjnnjjj', 'ajjnnjja', 'ajjjjjja',
 ];
+const LEGS = [
+  ['.pppppp.', '.pp..pp.', '.kk..kk.', '.bb..bbb'], // stand
+  ['.pppppp.', 'pp....pp', 'kk.....k', 'bb.....b'], // stride
+  ['.pppppp.', '..pppp..', '..kkkk..', '..bbbbb.'], // passing
+  ['.pppppp.', 'pp....pp', 'k.....kk', 'b.....bb'], // stride 2
+];
+const DOWN = ['..............', '.ss...........', 'hhhh.aa.......', 'hhhhjjjjjpppkb', 'mhffjjnnjpppkb', '.mf.aa........'];
+const OUTLINE = '#10101a';
 const SKINS = ['#f2c39b', '#c98c5a', '#8d5a35', '#5c3a21'];
 const spriteCache = new Map();
+function buildSprite(rows, map, facing) {
+  const w = rows[0].length, h = rows.length;
+  const c = document.createElement('canvas'); c.width = w + 2; c.height = h + 2;
+  const x = c.getContext('2d');
+  const filled = (r, k) => r >= 0 && r < h && k >= 0 && k < w && rows[r][facing > 0 ? k : w - 1 - k] !== '.';
+  for (let r = -1; r <= h; r++) for (let k = -1; k <= w; k++) {
+    if (filled(r, k)) { x.fillStyle = map[rows[r][facing > 0 ? k : w - 1 - k]]; x.fillRect(k + 1, r + 1, 1, 1); }
+    else if (filled(r - 1, k) || filled(r + 1, k) || filled(r, k - 1) || filled(r, k + 1)) { x.fillStyle = OUTLINE; x.fillRect(k + 1, r + 1, 1, 1); }
+  }
+  return c;
+}
+// frames: 0 stand, 1 run A, 2 run B (=stand legs), 3 run C, 4 passing, 5 down
 export function playerSprite(primary, secondary, frameI, facing, skin = 0, pants = '#e8e8e8') {
   const key = primary + secondary + frameI + facing + skin + pants;
   let c = spriteCache.get(key);
   if (c) return c;
-  c = document.createElement('canvas'); c.width = 7; c.height = 11;
-  const x = c.getContext('2d');
-  const map = { h: primary, m: '#c0c0c0', s: SKINS[skin % 4], j: primary, n: secondary, p: pants, l: secondary, b: '#111' };
-  const f = FRAMES[frameI];
-  for (let r = 0; r < 11; r++) for (let k = 0; k < 7; k++) {
-    const ch = f[r][facing > 0 ? k : 6 - k];
-    if (ch !== '.') { x.fillStyle = map[ch]; x.fillRect(k, r, 1, 1); }
+  const map = { h: primary, s: secondary, l: secondary, m: '#d8d8d8', f: SKINS[skin % 4], j: primary, n: secondary, a: SKINS[skin % 4], p: pants, k: secondary, b: '#1c1c24' };
+  if (frameI === 5) c = buildSprite(DOWN, map, facing);
+  else {
+    const legs = LEGS[[0, 1, 0, 3, 2][frameI] ?? 0];
+    c = buildSprite([...BODY, ...legs], map, facing);
   }
   spriteCache.set(key, c);
   return c;
 }
 export function drawSprite(img, x, y) { ctx.drawImage(img, Math.round(x), Math.round(y)); }
+// big helmet badge for menus (team logo stand-in), drawn at integer scale
+const HELMET = ['....ssssss....', '..hhhhhhhhhh..', '.hhhhhhhhhhhh.', 'hhhhhhhllhhhhh', 'hhhhhhllllhhmm', 'hhhhhhhllhhm.m',
+  'hhhhhhhhhhhmmm', '.hhhhhhhhhhm.m', '..hhhhhhhhmmm.', '...hhhhhh.....'];
+export function helmet(x, y, primary, secondary, scale = 2, facing = 1) {
+  const key = 'helm' + primary + secondary + facing;
+  let c = spriteCache.get(key);
+  if (!c) { c = buildSprite(HELMET, { h: primary, s: secondary, l: secondary, m: '#d8d8d8' }, facing); spriteCache.set(key, c); }
+  ctx.drawImage(c, Math.round(x), Math.round(y), c.width * scale, c.height * scale);
+}
+const BALL = [['.bbb.', 'bwbwb', '.bbb.'], ['.bbb.', 'bbwbb', '.bbb.'], ['..b..', '.bwb.', '..b..']];
+export function ballSprite(x, y, frame = 0) {
+  const key = 'ball' + frame;
+  let c = spriteCache.get(key);
+  if (!c) { c = buildSprite(BALL[frame % 3], { b: '#8b4a1c', w: '#f4f4f4' }, 1); spriteCache.set(key, c); }
+  ctx.drawImage(c, Math.round(x) - 3, Math.round(y) - 2);
+}
+
+// ---------- themed widgets ----------
+export const THEME = { bg: '#141833', bg2: '#1b2045', panel: '#232a55', panelHi: '#3a4380', panelLo: '#0d1028', gold: '#ffd23f', text: '#f4f4f4', dim: '#9aa3cf', good: '#3ccf6a', bad: '#ff4d5e', blue: '#2f6fe0', orange: '#ff9f1c' };
+export function themedBackground(w, h, t = 0) {
+  rect(0, 0, w, h, THEME.bg);
+  ctx.fillStyle = THEME.bg2;
+  for (let y = ((t * 8) | 0) % 16 - 16; y < h; y += 16) ctx.fillRect(0, y, w, 8);
+}
+export function shadeColor(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (v) => Math.max(0, Math.min(255, Math.round(v * f)));
+  return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
+}

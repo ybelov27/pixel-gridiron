@@ -20,6 +20,15 @@ export function starsOf(p) {
   const avg = a.reduce((s, v) => s + v, 0) / a.length;
   return clamp(Math.round(avg) / 2, 0.5, 5);
 }
+// overall rating 40-99 from the average attribute (1-10)
+export function ovr(p) {
+  const ks = p.attrs ? Object.keys(p.attrs) : [];
+  const keys = p.pos && ATTRS[p.pos] ? ATTRS[p.pos] : ks;
+  if (!keys.length) return 50;
+  const avg = keys.reduce((s, k) => s + (p.attrs[k] ?? 3), 0) / keys.length;
+  return Math.max(40, Math.min(99, Math.round(40 + (avg - 1) * 59 / 9)));
+}
+export const ovrColor = (v) => v >= 85 ? '#ffd23f' : v >= 72 ? '#3ccf6a' : v >= 58 ? '#f4f4f4' : '#9aa3cf';
 export function salaryFor(stars, age = 26) {
   let s = 1 + 1.6 * stars * stars;
   if (age >= 31) s *= 0.8;

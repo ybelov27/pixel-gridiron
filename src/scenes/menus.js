@@ -1,62 +1,87 @@
-// All management / menu screens, drawn on the 384x216 canvas.
-import { W, H, rect, frame, text, panel, stars, bar, playerSprite, drawSprite, starIcon, wrap, textWidth } from '../gfx.js';
+// All management / menu screens. Menus are laid out in a 384x216 box that main.js centres on screen.
+import * as G from '../gfx.js';
+import { BW as W, BH as H, rect, frame, text, panel, stars, bar, playerSprite, drawSprite, starIcon, wrap, textWidth, big, bigWidth, helmet, icon, THEME, shadeColor, boxX } from '../gfx.js';
 import { UI, fitText } from '../ui.js';
 import { app } from '../app.js';
 import { sfx } from '../audio.js';
 import { TEAM_DATA, CONFS, CONF_ABBR, DIVS } from '../data.js';
 import { newCareer, userTeam, teamName, DIFFS, WEEKS, userGameThisWeek, divisionTeams, ROUND_NAMES, teamRatings, diffParams, userEliminated } from '../league.js';
-import { ATTRS, ATTR_LABEL, MAX_STARS, displayName, xpForLevel, buildLineup } from '../players.js';
+import { ATTRS, ATTR_LABEL, MAX_STARS, displayName, xpForLevel, buildLineup, ovr, ovrColor } from '../players.js';
 import * as O from '../office.js';
 import { startSeason, status, simUserGame, finishUserGame, simRound, opponentOf } from '../flow.js';
 import { Match } from '../match.js';
 import { GameScene } from './game.js';
 import { saveCareer, loadCareer, hasSave, deleteSave, exportCareer, importCareer } from '../save.js';
 
-const C = { bg: '#10121c', panel: '#1a1c2c', gold: '#ffcd34', dim: '#8b93af', good: '#38b764', bad: '#ff004d', blue: '#3b5dc9', white: '#f4f4f4' };
+const C = { bg: THEME.bg, panel: THEME.panel, gold: THEME.gold, dim: THEME.dim, good: '#2fa84f', bad: THEME.bad, blue: THEME.blue, white: THEME.text };
 const hub = () => app.go(new HubScene());
 const err = (e) => { if (e) { app.toast(e); sfx.bad(); return true; } sfx.cash(); return false; };
+const lightText = (t) => (t.c2 === '#111111' || t.c2 === '#1d3557' || t.c2 === '#22223b' || t.c2 === '#14213d' || t.c2 === '#2b2b2b' || t.c2 === '#3f2a14' || t.c2 === '#1e3a8a') ? '#fff' : t.c2;
+// full-width title bar (extends past the 384 box to the screen edges)
 function header(title, sub = '', back = hub) {
-  rect(0, 0, W, 16, '#000');
-  text(title, 6, 5, C.gold);
-  if (sub) text(sub, W - 50, 5, C.dim, 1, 'right');
-  if (back) UI.button(W - 44, 1, 42, 14, 'BACK', back, { color: '#333c57' });
+  const ex = boxX();
+  rect(-ex, 0, G.W, 19, '#0b0d1c'); rect(-ex, 18, G.W, 1, '#2a3166');
+  if (back) UI.button(3, 2, 46, 15, '< BACK', back, { color: '#4b5378' });
+  big(title, back ? 56 : 6, 6, C.gold);
+  if (sub) text(sub, W - 6, 7, C.dim, 1, 'right');
 }
-function ccBadge(x, y) { const c = app.career; text(`CC ${c.cc}`, x, y, C.gold); }
 function money(v) { return `$${(Math.round(v * 10) / 10).toFixed(1)}M`; }
 function pager(state, total, perPage, x, y) {
   const pages = Math.max(1, Math.ceil(total / perPage));
   if (pages <= 1) return;
-  UI.button(x, y, 16, 12, '<', () => { state.page = Math.max(0, state.page - 1); }, { color: '#333c57' });
-  text(`${state.page + 1}/${pages}`, x + 30, y + 3, C.dim, 1, 'center');
-  UI.button(x + 44, y, 16, 12, '>', () => { state.page = Math.min(pages - 1, state.page + 1); }, { color: '#333c57' });
+  UI.button(x, y, 18, 13, '<', () => { state.page = Math.max(0, state.page - 1); }, { color: '#4b5378' });
+  text(`${state.page + 1}/${pages}`, x + 31, y + 4, C.dim, 1, 'center');
+  UI.button(x + 44, y, 18, 13, '>', () => { state.page = Math.min(pages - 1, state.page + 1); }, { color: '#4b5378' });
+}
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = () => navigator.standalone || matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches;
+const canFullscreen = () => !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen) && !standalone();
+function toggleFullscreen() {
+  const d = document, el = d.documentElement;
+  if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+  else { const r = (el.requestFullscreen || el.webkitRequestFullscreen).call(el); if (r && r.catch) r.catch(() => {}); try { screen.orientation.lock('landscape').catch(() => {}); } catch (_) {} }
 }
 
-// ===================================================================== TITLE
+// ===================================================================== TITLE (full screen)
 export class TitleScene {
-  constructor() { this.t = 0; }
+  constructor() { this.t = 0; this.full = true; this.noAutosave = true; }
   update(dt) { this.t += dt; }
   draw() {
-    // field backdrop
-    for (let y = 0; y < H; y += 12) rect(0, y, W, 12, (y / 12) % 2 ? '#2f8f3a' : '#34993f');
-    for (let x = (-(this.t * 30) % 36); x < W; x += 36) rect(x, 0, 1, H, 'rgba(255,255,255,0.4)');
-    for (let i = 0; i < 6; i++) {
-      const d = TEAM_DATA[(i * 5) % 32];
-      const x = ((this.t * (40 + i * 6) + i * 70) % (W + 40)) - 20;
-      drawSprite(playerSprite(d[3], d[4], Math.floor(this.t * 8 + i) % 2, 1, i), x, 150 + (i % 3) * 14);
+    const SW = G.W, SH = G.H, t = this.t;
+    // scrolling field
+    const off = (t * 40) % 80;
+    for (let x = -off; x < SW; x += 80) { rect(x, 0, 40, SH, '#2e8b3a'); rect(x + 40, 0, 40, SH, '#349a41'); rect(x, 0, 1, SH, 'rgba(255,255,255,0.6)'); }
+    for (let x = -((t * 40) % 16); x < SW; x += 16) { rect(x, Math.round(SH * 0.42), 1, 3, 'rgba(255,255,255,0.45)'); rect(x, Math.round(SH * 0.58), 1, 3, 'rgba(255,255,255,0.45)'); }
+    // a play: runner chased by defenders, ball arcing overhead
+    const lane = SH - 46;
+    for (let i = 0; i < 7; i++) {
+      const d = TEAM_DATA[(i * 5 + 3) % 32];
+      const x = ((t * (46 + i * 5) + i * 63) % (SW + 60)) - 30;
+      drawSprite(playerSprite(d[3], d[4], [1, 2, 3, 2][Math.floor(t * 9 + i) % 4], 1, i, '#e9e9e9'), x, lane - (i % 3) * 14);
     }
-    rect(0, 30, W, 52, 'rgba(0,0,0,0.55)');
-    text('PIXEL', W / 2 + 2, 36, '#000', 4, 'center'); text('PIXEL', W / 2, 34, C.gold, 4, 'center');
-    text('GRIDIRON', W / 2 + 2, 60, '#000', 3, 'center'); text('GRIDIRON', W / 2, 58, '#fff', 3, 'center');
-    let y = 92;
+    const bt = (t % 2.4) / 2.4, bx = SW * (0.1 + bt * 0.8), by = SH * 0.62 - Math.sin(bt * Math.PI) * SH * 0.25;
+    G.ballSprite(bx, by, Math.floor(t * 12) % 3);
+    // logo
+    const cy = Math.round(SH * 0.12);
+    rect(0, cy - 6, SW, 62, 'rgba(11,13,28,0.72)');
+    rect(0, cy - 6, SW, 1, '#ffd23f'); rect(0, cy + 55, SW, 1, '#ffd23f');
+    big('PIXEL', SW / 2, cy, '#ffd23f', { align: 'center', scale: 4 });
+    big('GRIDIRON', SW / 2, cy + 31, '#fff', { align: 'center', scale: 3 });
+    // menu
+    const bw = 140, bx0 = Math.floor((SW - bw) / 2);
+    let y = cy + 66;
     if (hasSave()) {
-      UI.button(W / 2 - 60, y, 120, 18, 'CONTINUE', () => {
+      UI.button(bx0, y, bw, 22, 'CONTINUE', () => {
         const c = loadCareer(); if (!c) return app.toast('SAVE IS CORRUPT');
         app.career = c; hub();
-      }, { color: C.good }); y += 22;
+      }, { color: '#2fa84f' }); y += 26;
     }
-    UI.button(W / 2 - 60, y, 120, 18, 'NEW CAREER', () => app.go(new NewCareerScene())); y += 22;
-    UI.button(W / 2 - 60, y, 120, 18, 'IMPORT SAVE', () => importCareer().then((c) => { app.career = c; saveCareer(c); app.toast('SAVE IMPORTED'); hub(); }).catch((e) => app.toast(String(e.message || e).toUpperCase())), { color: '#5d275d' });
-    text('AN ORIGINAL RETRO FOOTBALL GAME - OFFLINE', W / 2, H - 9, '#fff', 1, 'center');
+    UI.button(bx0, y, bw, 22, 'NEW CAREER', () => app.go(new NewCareerScene())); y += 26;
+    UI.button(bx0, y, bw, 18, 'IMPORT SAVE', () => importCareer().then((c) => { app.career = c; saveCareer(c); app.toast('SAVE IMPORTED'); hub(); }).catch((e) => app.toast(String(e.message || e).toUpperCase())), { color: '#7e2553' });
+    if (canFullscreen()) UI.button(SW - 70 - G.SAFE.r, 4 + G.SAFE.t, 66, 16, 'FULLSCREEN', toggleFullscreen, { color: '#4b5378', small: true });
+    const hint = isIOS() && !standalone() ? 'TIP: SHARE > ADD TO HOME SCREEN TO PLAY FULLSCREEN, EVEN OFFLINE' : 'AN ORIGINAL RETRO FOOTBALL GAME - WORKS OFFLINE';
+    rect(0, SH - 12 - G.SAFE.b, SW, 12 + G.SAFE.b, 'rgba(11,13,28,0.75)');
+    text(hint, SW / 2, SH - 8 - G.SAFE.b, '#fff', 1, 'center');
   }
 }
 
@@ -64,71 +89,88 @@ export class TitleScene {
 export class NewCareerScene {
   constructor() { this.team = 0; this.diff = 'MEDIUM'; this.qlen = 2; this.dynamic = true; this.noAutosave = true; }
   draw() {
-    header('NEW CAREER', '', () => app.go(new TitleScene()));
+    header('NEW CAREER', 'PICK YOUR CLUB', () => app.go(new TitleScene()));
     const d = TEAM_DATA[this.team];
-    panel(20, 24, W - 40, 70);
-    UI.button(28, 46, 20, 24, '<', () => { this.team = (this.team + 31) % 32; });
-    UI.button(W - 48, 46, 20, 24, '>', () => { this.team = (this.team + 1) % 32; });
-    rect(60, 32, 40, 54, d[3]); frame(60, 32, 40, 54, d[4]);
-    drawSprite(playerSprite(d[3], d[4], 0, 1, this.team % 4), 77, 48);
-    text(d[2], 80, 70, '#fff', 1, 'center');
-    text(d[0], 110, 36, '#fff', 2); text(d[1], 110, 52, d[4] === '#111111' ? '#fff' : d[4], 2);
+    const t = { c1: d[3], c2: d[4] };
+    panel(6, 24, W - 12, 78, shadeColor(d[3], 0.45));
+    rect(7, 88, W - 14, 13, shadeColor(d[3], 0.3));
+    rect(7, 25, W - 14, 2, d[4]);
+    UI.button(12, 44, 22, 30, '<', () => { this.team = (this.team + 31) % 32; sfx.click(); });
+    UI.button(W - 34, 44, 22, 30, '>', () => { this.team = (this.team + 1) % 32; sfx.click(); });
+    helmet(42, 36, d[3], d[4], 3, 1);
+    big(d[0], 102, 36, '#fff', { scale: 2 });
+    big(d[1], 102, 56, lightText(t), { scale: 2 });
     const conf = Math.floor(this.team / 16), div = Math.floor(this.team / 4) % 4;
-    text(`${CONFS[conf]} CONF. - ${DIVS[div]} DIV.`, 110, 70, C.dim);
-    text(`TEAM ${this.team + 1}/32`, 110, 80, C.dim);
-    UI.button(W - 150, 76, 96, 14, 'RANDOM TEAM', () => { this.team = Math.floor(Math.random() * 32); }, { color: '#5d275d' });
-    text('DIFFICULTY', 24, 102, C.gold);
-    DIFFS.forEach((df, i) => UI.button(24 + i * 84, 110, 80, 16, df, () => { this.diff = df; }, { selected: this.diff === df, color: this.diff === df ? C.blue : '#333c57' }));
-    text('QUARTER LENGTH', 24, 132, C.gold);
-    [1, 2, 3].forEach((q, i) => UI.button(24 + i * 56, 140, 52, 16, `${q} MIN`, () => { this.qlen = q; }, { selected: this.qlen === q, color: this.qlen === q ? C.blue : '#333c57' }));
-    text('DYNAMIC DIFFICULTY', 210, 132, C.gold);
-    UI.button(210, 140, 80, 16, this.dynamic ? 'ON' : 'OFF', () => { this.dynamic = !this.dynamic; }, { color: this.dynamic ? C.good : '#333c57' });
-    UI.button(W / 2 - 70, 172, 140, 22, 'START CAREER', () => {
+    text(`${CONFS[conf]} CONFERENCE - ${DIVS[div]} DIVISION   (${this.team + 1}/32)`, 12, 92, '#fff');
+    UI.button(W - 110, 86, 94, 14, 'RANDOM TEAM', () => { this.team = Math.floor(Math.random() * 32); }, { color: '#7e2553' });
+    big('DIFFICULTY', 8, 110, C.gold);
+    DIFFS.forEach((df, i) => UI.button(8 + i * 93, 120, 89, 18, df, () => { this.diff = df; }, { selected: this.diff === df, color: this.diff === df ? C.blue : '#4b5378' }));
+    big('QUARTER LENGTH', 8, 146, C.gold);
+    [1, 2, 3].forEach((q, i) => UI.button(8 + i * 58, 156, 54, 18, `${q} MIN`, () => { this.qlen = q; }, { selected: this.qlen === q, color: this.qlen === q ? C.blue : '#4b5378' }));
+    big('DYNAMIC DIFF.', 196, 146, C.gold);
+    UI.button(196, 156, 72, 18, this.dynamic ? 'ON' : 'OFF', () => { this.dynamic = !this.dynamic; }, { color: this.dynamic ? C.good : '#4b5378' });
+    UI.button(W / 2 - 80, 184, 160, 26, 'START CAREER', () => {
       const go = () => {
         app.career = newCareer({ teamId: this.team, difficulty: this.diff, qlen: this.qlen, dynamic: this.dynamic });
         saveCareer(app.career); hub();
       };
       if (hasSave()) app.confirm('OVERWRITE SAVE?', ['STARTING A NEW CAREER REPLACES YOUR CURRENT SAVE. EXPORT IT FIRST FROM SETTINGS IF YOU WANT TO KEEP IT.'], go, 'START');
       else go();
-    }, { color: C.good, scale: 1 });
+    }, { color: C.good });
   }
 }
 
 // ===================================================================== HUB
+const TABS = [
+  ['TEAM', 'team', () => app.go(new RosterScene())], ['OFFICE', 'office', () => app.go(new OfficeScene())],
+  ['SIGN', 'sign', () => app.go(new FAScene())], ['SCHED', 'sched', () => app.go(new ScheduleScene())],
+  ['TABLE', 'table', () => app.go(new StandingsScene())], ['BRACKET', 'bracket', () => app.go(new PlayoffsScene())],
+  ['HISTORY', 'trophy', () => app.go(new HistoryScene())], ['MENU', 'gear', () => app.go(new SettingsScene())],
+];
 export class HubScene {
+  backdrop(SW, SH) {
+    const c = app.career; if (!c) return;
+    const t = userTeam(c), oy = G.boxY();
+    rect(0, oy, SW, 34, t.c1); rect(0, oy + 34, SW, 2, t.c2); rect(0, oy + 36, SW, 1, '#0b0d1c');
+    rect(0, oy + H - 34, SW, 34 + (SH - oy - H), '#0b0d1c'); rect(0, oy + H - 35, SW, 1, '#2a3166');
+  }
   draw() {
     const c = app.career, t = userTeam(c);
     if (!app.modal && c.pending.length) this.showEvent(c);
-    rect(0, 0, W, 16, t.c1); rect(0, 15, W, 1, t.c2);
-    text(`${t.city} ${t.name}`, 6, 5, '#fff');
-    text(`Y${c.year}  ${t.w}-${t.l}${t.t ? '-' + t.t : ''}   CC ${c.cc}`, W - 6, 5, '#fff', 1, 'right');
-    // ---- action panel
-    panel(4, 20, 188, 112);
+    // banner
+    rect(2, 1, 35, 31, shadeColor(t.c1, 0.45)); rect(2, 31, 35, 1, '#0b0d1c');
+    helmet(4, 4, t.c1, t.c2, 2, 1);
+    big(t.city, 42, 5, '#fff');
+    big(t.name, 42, 17, lightText(t), { scale: 1 });
+    const rec = `${t.w}-${t.l}${t.t ? '-' + t.t : ''}`;
+    big(rec, W - 8, 4, '#fff', { align: 'right', scale: 2 });
+    text(`SEASON ${c.year}`, W - 8, 24, '#fff', 1, 'right');
+    // action card
+    panel(4, 41, 236, 136);
     this.actionPanel(c, t);
-    // ---- meters
-    panel(4, 136, 188, 76);
-    const m = (y, label, v, col) => { text(label, 10, y, C.dim); bar(78, y, 106, 5, v, 100, col); };
-    m(142, 'FAN RATING', c.fan, '#29adff');
-    m(151, 'JOB SECURITY', c.job, c.job < 25 ? C.bad : c.job < 50 ? '#ffa300' : C.good);
-    text('SALARY CAP', 10, 160, C.dim); text(`${money(O.capUsed(c))} / ${money(c.cap)}`, 184, 160, '#fff', 1, 'right');
-    text(`STARS ${c.roster.length}/${MAX_STARS}`, 10, 169, C.dim);
-    text(`OFF ${t.off.toFixed(1)}  DEF ${t.def.toFixed(1)}`, 184, 169, '#fff', 1, 'right');
-    const f = c.facilities;
-    text('STADIUM', 10, 179, C.dim); stars(52, 179, f.stadium);
-    text('TRAIN', 102, 179, C.dim); stars(130, 179, f.training);
-    text('REHAB', 10, 188, C.dim); stars(52, 188, f.rehab);
-    text(`OC ${c.coords.oc ? c.coords.oc.stars + '*' : '-'}  DC ${c.coords.dc ? c.coords.dc.stars + '*' : '-'}`, 184, 188, '#fff', 1, 'right');
-    text(`${c.settings.difficulty}${c.settings.dynamic ? ' (DYN ' + (c.dyn >= 0 ? '+' : '') + c.dyn.toFixed(2) + ')' : ''}  ${c.settings.qlen} MIN QTRS`, 10, 200, C.dim);
-    // ---- nav
-    const nav = [['ROSTER', () => app.go(new RosterScene())], ['FRONT OFFICE', () => app.go(new OfficeScene())],
-      ['FREE AGENTS', () => app.go(new FAScene())], ['SCHEDULE', () => app.go(new ScheduleScene())],
-      ['STANDINGS', () => app.go(new StandingsScene())], ['PLAYOFFS', () => app.go(new PlayoffsScene())],
-      ['HISTORY', () => app.go(new HistoryScene())], ['NEWS', () => app.go(new NewsScene())],
-      ['SETTINGS', () => app.go(new SettingsScene())], ['SAVE & QUIT', () => { saveCareer(c); app.career = null; app.go(new TitleScene()); }]];
-    nav.forEach(([l, fn], i) => UI.button(196 + (i % 2) * 94, 20 + Math.floor(i / 2) * 18, 90, 16, l, fn, { color: i === 9 ? '#333c57' : C.blue }));
-    panel(196, 112, 184, 100);
-    text('NEWS', 202, 117, C.gold);
-    c.news.slice(0, 11).forEach((n, i) => text(fitText(n, 172), 202, 126 + i * 8, i ? '#c2c3c7' : '#fff'));
+    // status column
+    panel(244, 41, 136, 136);
+    icon('coin', 250, 47);
+    big(`${c.cc} CC`, 262, 48, C.gold);
+    const m = (y, label, v, col) => { text(label, 250, y, C.dim); bar(250, y + 7, 124, 4, v, 100, col, '#0d1028'); };
+    m(62, 'FAN RATING', c.fan, '#29adff');
+    m(76, 'JOB SECURITY', c.job, c.job < 25 ? C.bad : c.job < 50 ? '#ffa300' : C.good);
+    text('CAP', 250, 92, C.dim); text(`${money(O.capUsed(c))}/${money(c.cap)}`, 374, 92, '#fff', 1, 'right');
+    text('STARS', 250, 101, C.dim); text(`${c.roster.length}/${MAX_STARS}`, 374, 101, '#fff', 1, 'right');
+    text('OFFENSE', 250, 110, C.dim); stars(345, 110, Math.round(t.off * 2) / 2);
+    text('DEFENSE', 250, 118, C.dim); stars(345, 118, Math.round(t.def * 2) / 2);
+    rect(248, 127, 128, 1, '#3a4380');
+    big('NEWS', 250, 131, C.gold);
+    c.news.slice(0, 4).forEach((n, i) => text(fitText(n.replace(/^Y\d+ /, ''), 124), 250, 142 + i * 8, i ? '#9aa3cf' : '#fff'));
+    UI.zone(244, 127, 136, 50, () => app.go(new NewsScene()));
+    // tab bar
+    const tw = Math.floor(W / TABS.length);
+    TABS.forEach(([label, ic, fn], i) => {
+      const x = i * tw;
+      UI.button(x + 1, H - 32, tw - 2, 30, '', fn, { color: '#1b2045' });
+      icon(ic, x + Math.floor(tw / 2) - 4, H - 28, '#fff');
+      text(label, x + tw / 2, H - 15, '#9aa3cf', 1, 'center');
+    });
   }
   showEvent(c) {
     const ev = c.pending[0];
@@ -140,58 +182,63 @@ export class HubScene {
     } })) };
   }
   actionPanel(c, t) {
-    const st = status(c);
-    const X = 12;
+    const st = status(c), X = 10, R = 234;
     if (st === 'start') {
-      text(`SEASON ${c.year}`, X, 28, C.gold, 2);
-      text('PRESEASON. SIGN FREE AGENTS, UPGRADE', X, 48, '#fff'); text('FACILITIES OR HIRE STAFF, THEN KICK OFF.', X, 56, '#fff');
-      UI.button(X, 100, 172, 24, 'START SEASON', () => { startSeason(c); }, { color: C.good });
+      big(`SEASON ${c.year}`, X, 48, C.gold, { scale: 2 });
+      ['PRESEASON. SIGN FREE AGENTS, UPGRADE YOUR', 'FACILITIES AND HIRE COACHES - THEN KICK OFF', `A ${WEEKS}-GAME SEASON. THE TOP 6 IN EACH`, 'CONFERENCE REACH THE PLAYOFFS.'].forEach((l, i) => text(l, X, 70 + i * 9, '#fff'));
+      UI.button(X, 140, R - X - 4, 30, 'START SEASON', () => { startSeason(c); }, { color: C.good });
       return;
     }
     if (st === 'play') {
       const g = userGameThisWeek(c), o = opponentOf(c, g), home = g.h === c.userTeamId;
       const lbl = c.phase === 'playoffs' ? ROUND_NAMES[c.playoffs.round] : `WEEK ${c.week + 1} OF ${WEEKS}`;
-      text(lbl, X, 26, C.gold);
-      text(g.neutral ? 'NEUTRAL SITE' : home ? 'HOME' : 'AWAY', 184, 26, C.dim, 1, 'right');
-      rect(X, 36, 30, 30, o.c1); frame(X, 36, 30, 30, o.c2);
-      drawSprite(playerSprite(o.c1, o.c2, 0, -1, o.id % 4, '#3a3a3a'), X + 12, 46);
-      text((home ? 'VS ' : 'AT ') + o.city, X + 36, 38, '#fff'); text(o.name, X + 36, 46, '#fff', 1);
-      text(`${o.w}-${o.l}${o.t ? '-' + o.t : ''}`, X + 36, 56, C.dim);
-      const dp = diffParams(c);
-      const me = teamRatings(c, c.userTeamId);
-      text('THEM OFF', X, 72, C.dim); stars(X + 40, 72, Math.round((o.off + dp.cpu) * 2) / 2);
-      text('DEF', X + 92, 72, C.dim); stars(X + 108, 72, Math.round((o.def + dp.cpu) * 2) / 2);
-      text('YOU  OFF', X, 81, C.dim); stars(X + 40, 81, Math.round(me.off * 2) / 2);
-      text('DEF', X + 92, 81, C.dim); stars(X + 108, 81, Math.round(me.def * 2) / 2);
+      big(lbl, X, 47, C.gold);
+      text(g.neutral ? 'NEUTRAL SITE' : home ? 'HOME GAME' : 'AWAY GAME', R, 48, C.dim, 1, 'right');
+      // matchup
+      helmet(X + 2, 60, t.c1, t.c2, 2, 1);
+      big('VS', 120, 70, '#fff', { align: 'center' });
+      helmet(R - 34, 60, o.c1, o.c2, 2, -1);
+      big(t.abbr, X + 16, 88, '#fff', { align: 'center' }); big(o.abbr, R - 18, 88, '#fff', { align: 'center' });
+      big(o.city, 120, 60, '#fff', { align: 'center' });
+      text(`${o.name}  (${o.w}-${o.l}${o.t ? '-' + o.t : ''})`, 120, 80, C.dim, 1, 'center');
+      const dp = diffParams(c), me = teamRatings(c, c.userTeamId);
+      const row = (y, lab, a, b) => { stars(X + 4, y, Math.round(a * 2) / 2); text(lab, 120, y, C.dim, 1, 'center'); stars(R - 34, y, Math.round(b * 2) / 2); };
+      row(100, 'OFFENSE', me.off, o.off + dp.cpu); row(109, 'DEFENSE', me.def, o.def + dp.cpu);
       const inj = c.roster.filter((p) => p.injury).length;
-      if (inj) text(`${inj} STAR(S) INJURED`, X, 90, C.bad);
-      UI.button(X, 100, 110, 24, 'PLAY GAME', () => this.play(c, g), { color: C.good });
-      UI.button(X + 114, 100, 58, 24, 'SIM', () => { const s = simUserGame(c); saveCareer(c); app.go(new PostGameScene(s)); }, { color: '#a7a7a7', textColor: '#000' });
+      if (inj) text(`${inj} STAR(S) INJURED`, 120, 120, C.bad, 1, 'center');
+      UI.button(X, 132, 152, 38, '', () => this.play(c, g), { color: C.good });
+      big('PLAY', X + 76, 146, '#fff', { align: 'center', scale: 2 });
+      UI.button(X + 158, 132, R - X - 162, 38, 'SIM', () => { const s = simUserGame(c); saveCareer(c); app.go(new PostGameScene(s)); }, { color: '#4b5378' });
       return;
     }
     if (st === 'simround') {
       const P = c.playoffs;
-      text(`PLAYOFFS - ${ROUND_NAMES[P.round]}`, X, 28, C.gold);
-      text(userEliminated(c) ? 'YOUR SEASON IS OVER.' : 'YOU HAVE A BYE THIS ROUND.', X, 44, '#fff');
-      UI.button(X, 100, 172, 24, `SIM ${ROUND_NAMES[P.round]}`, () => { simRound(c); }, { color: '#a7a7a7', textColor: '#000' });
+      big(`PLAYOFFS`, X, 48, C.gold, { scale: 2 });
+      big(ROUND_NAMES[P.round], X, 68, '#fff');
+      text(userEliminated(c) ? 'YOUR SEASON IS OVER. WATCH THE REST PLAY OUT.' : 'YOU HAVE A BYE THIS ROUND.', X, 82, '#fff');
+      UI.button(X, 140, R - X - 4, 30, `SIM ${ROUND_NAMES[P.round]}`, () => { simRound(c); }, { color: '#4b5378' });
       return;
     }
     if (st === 'review') {
-      text('SEASON COMPLETE', X, 28, C.gold, 2);
-      text(`CHAMPION: ${teamName(c.teams[c.playoffs.champion])}`, X, 48, '#fff');
-      UI.button(X, 100, 172, 24, 'SEASON REVIEW', () => { O.startOffseason(c); app.go(new AwardsScene()); }, { color: C.good });
+      const ch = c.teams[c.playoffs.champion];
+      big('SEASON COMPLETE', X, 48, C.gold);
+      helmet(X, 62, ch.c1, ch.c2, 3, 1);
+      big('PIXEL BOWL', X + 54, 66, '#fff'); big('CHAMPIONS', X + 54, 78, '#fff');
+      text(teamName(ch), X + 54, 92, C.gold);
+      UI.button(X, 140, R - X - 4, 30, 'SEASON REVIEW', () => { O.startOffseason(c); app.go(new AwardsScene()); }, { color: C.good });
       return;
     }
-    // offseason stages
     const stage = c.stage;
-    text(`OFFSEASON ${c.year}`, X, 28, C.gold, 2);
+    big(`OFFSEASON ${c.year}`, X, 48, C.gold, { scale: 2 });
     const go = { awards: ['SEASON REVIEW', () => app.go(new AwardsScene())], fired: ['JOB OFFERS', () => app.go(new FiredScene())],
-      resign: ['RE-SIGN PLAYERS', () => app.go(new ResignScene())], draft: [`DRAFT - ROUND ${c.draft?.round}`, () => app.go(new DraftScene())],
+      resign: ['RE-SIGN PLAYERS', () => app.go(new ResignScene())], draft: [`DRAFT ROUND ${c.draft?.round}`, () => app.go(new DraftScene())],
       fa: ['FREE AGENCY', () => app.go(new FAScene())] }[stage];
-    const steps = ['awards', 'resign', 'draft', 'fa'];
-    steps.forEach((s, i) => text(`${i + 1}. ${s === 'fa' ? 'FREE AGENCY' : s.toUpperCase()}`, X, 48 + i * 9, s === stage || (stage === 'fired' && s === 'awards') ? C.gold : C.dim));
-    if (go) UI.button(X, 100, stage === 'fa' ? 84 : 172, 24, go[0], go[1], { color: C.blue });
-    if (stage === 'fa') UI.button(X + 88, 100, 84, 24, `BEGIN Y${c.year + 1}`, () => { O.newSeason(c); app.toast(`WELCOME TO SEASON ${c.year}`); }, { color: C.good });
+    ['awards', 'resign', 'draft', 'fa'].forEach((s, i) => {
+      const on = s === stage || (stage === 'fired' && s === 'awards');
+      big(`${i + 1}. ${s === 'fa' ? 'FREE AGENCY' : s === 'awards' ? 'REVIEW' : s.toUpperCase()}`, X, 70 + i * 13, on ? C.gold : '#4b5378', { shadow: false });
+    });
+    if (go) UI.button(X, 140, stage === 'fa' ? 108 : R - X - 4, 30, go[0], go[1], { color: C.blue });
+    if (stage === 'fa') UI.button(X + 114, 140, R - X - 118, 30, `START Y${c.year + 1}`, () => { O.newSeason(c); app.toast(`WELCOME TO SEASON ${c.year}`); }, { color: C.good });
   }
   play(c, g) {
     if (!c.roster.some((p) => p.pos === 'K')) app.toast('NO STAR KICKER - A REGULAR WILL KICK');
@@ -206,37 +253,40 @@ export class HubScene {
 export class PostGameScene {
   constructor(s) { this.s = s; }
   draw() {
-    const s = this.s, c = app.career;
+    const s = this.s, c = app.career, t = userTeam(c), o = c.teams.find((x) => x.abbr === s.opp) || t;
     header('GAME SUMMARY', s.round, null);
-    const res = s.won ? 'WIN' : s.tie ? 'TIE' : 'LOSS';
-    panel(10, 22, W - 20, 50);
-    text(res, W / 2, 28, s.won ? C.good : s.tie ? C.gold : C.bad, 3, 'center');
-    text(`${userTeam(c).abbr} ${s.us} - ${s.them} ${s.opp}${s.ot ? ' (OT)' : ''}`, W / 2, 50, '#fff', 2, 'center');
-    panel(10, 76, 180, 116);
-    text(`+${s.cc} COACHING CREDITS`, 18, 82, C.gold);
-    text('EXPERIENCE', 18, 94, C.dim);
-    s.xp.slice().sort((a, b) => b[1] - a[1]).slice(0, 9).forEach(([n, x], i) => { text(fitText(n, 110), 18, 103 + i * 9, '#fff'); text(`+${x} XP`, 182, 103 + i * 9, C.good, 1, 'right'); });
-    panel(194, 76, 180, 116);
-    text('LEVEL UPS', 202, 82, C.gold);
-    (s.levelUps.length ? s.levelUps : ['NONE']).slice(0, 5).forEach((n, i) => text(n + (s.levelUps.length ? ' +1 SKILL PT' : ''), 202, 92 + i * 8, '#fff'));
-    text('INJURIES', 202, 140, C.bad);
-    (s.injuries.length ? s.injuries : [['NONE', 0]]).slice(0, 5).forEach(([n, w], i) => text(w ? `${n} - ${w} WK` : n, 202, 150 + i * 8, '#fff'));
-    UI.button(W / 2 - 60, 196, 120, 16, 'CONTINUE', hub, { color: C.good });
+    const res = s.won ? 'VICTORY' : s.tie ? 'TIE' : 'DEFEAT';
+    panel(4, 23, W - 8, 52, s.won ? '#1f6b3a' : s.tie ? '#3a4170' : '#6b1f2a');
+    helmet(12, 30, t.c1, t.c2, 2, 1); helmet(W - 44, 30, o.c1, o.c2, 2, -1);
+    big(res, W / 2, 28, s.won ? C.gold : '#fff', { align: 'center', scale: 2 });
+    big(`${t.abbr} ${s.us} - ${s.them} ${s.opp}${s.ot ? ' OT' : ''}`, W / 2, 50, '#fff', { align: 'center' });
+    big(`+${s.cc} CC`, W / 2, 62, C.gold, { align: 'center', shadow: false });
+    panel(4, 79, 186, 110);
+    big('EXPERIENCE', 10, 84, C.gold);
+    s.xp.slice().sort((a, b) => b[1] - a[1]).slice(0, 9).forEach(([n, x], i) => { text(fitText(n, 110), 10, 96 + i * 10, '#fff'); text(`+${x} XP`, 184, 96 + i * 10, C.good, 1, 'right'); });
+    panel(194, 79, 186, 110);
+    big('LEVEL UPS', 200, 84, C.gold);
+    (s.levelUps.length ? s.levelUps : ['NONE']).slice(0, 4).forEach((n, i) => text(n + (s.levelUps.length ? ' +1 SKILL PT' : ''), 200, 96 + i * 9, '#fff'));
+    big('INJURIES', 200, 136, C.bad);
+    (s.injuries.length ? s.injuries : [['NONE', 0]]).slice(0, 4).forEach(([n, w], i) => text(w ? `${n} - ${w} WK` : n, 200, 148 + i * 9, '#fff'));
+    UI.button(W / 2 - 70, 193, 140, 20, 'CONTINUE', hub, { color: C.good });
   }
 }
 
 // ===================================================================== ROSTER
 const POS_ORDER = ['QB', 'RB', 'WR', 'TE', 'OL', 'K', 'DL', 'LB', 'DB'];
 function rosterRows(list, y0, onPick, opts = {}) {
-  text('POS NAME', 8, y0, C.dim); text('AGE', 112, y0, C.dim); text('RATING', 132, y0, C.dim);
+  text('POS NAME', 8, y0, C.dim); text('AGE', 108, y0, C.dim); text('RATING', 126, y0, C.dim); text('OVR', 162, y0, C.dim);
   text(opts.col4 ?? 'MOR', 196, y0, C.dim); text(opts.col5 ?? 'CND', 228, y0, C.dim); text(opts.salLabel || 'SALARY', 258, y0, C.dim); text('YRS', 300, y0, C.dim);
   list.forEach((p, i) => {
     const y = y0 + 9 + i * 12;
-    rect(4, y - 2, W - 8, 11, i % 2 ? '#1a1c2c' : '#22253a');
+    rect(4, y - 2, W - 8, 11, i % 2 ? '#1b2045' : '#232a55');
     UI.zone(4, y - 2, W - 8, 11, () => onPick(p));
-    text(p.pos, 8, y, C.gold); text(fitText(displayName(p), 82), 24, y, p.injury ? C.bad : '#fff');
-    text(p.age, 112, y, '#fff');
-    stars(132, y, opts.scout ? p.scout.stars : p.stars);
+    text(p.pos, 8, y, C.gold); text(fitText(displayName(p), 80), 24, y, p.injury ? C.bad : '#fff');
+    text(p.age, 108, y, '#fff');
+    stars(126, y, opts.scout ? p.scout.stars : p.stars);
+    const ov = opts.scout ? Math.round(40 + (p.scout.stars * 2 - 1) * 59 / 9) : ovr(p);
+    text((opts.scout ? '~' : '') + ov, opts.scout ? 160 : 164, y, ovrColor(ov));
     if (opts.c4) opts.c4(p, y); else bar(196, y + 1, 26, 3, p.morale, 100, p.morale < 30 ? C.bad : C.good);
     if (opts.c5) opts.c5(p, y); else if (p.injury) text(`INJ${p.injury}`, 228, y, C.bad); else bar(228, y + 1, 26, 3, p.condition, 100, '#29adff');
     text(money(opts.sal ? opts.sal(p) : p.salary), 258, y, '#fff'); text(p.years, 304, y, p.years <= 1 ? '#ffa300' : '#fff');
@@ -263,6 +313,9 @@ export class PlayerScene {
     panel(4, 20, 120, 100);
     rect(10, 26, 30, 36, t.c1); drawSprite(playerSprite(t.c1, t.c2, 0, 1, p.skin || 0), 22, 38);
     text(`AGE ${p.age}`, 46, 27, '#fff');
+    const ov = sc ? Math.round(40 + (sc.stars * 2 - 1) * 59 / 9) : ovr(p);
+    rect(92, 24, 28, 22, '#0b0d1c'); rect(93, 25, 26, 20, '#1b2045');
+    big(String(ov), 106, 27, ovrColor(ov), { align: 'center' }); text(sc ? 'EST' : 'OVR', 106, 37, C.dim, 1, 'center');
     const sc = this.mode === 'draft' ? p.scout : null;
     text('RATING', 46, 37, C.dim); stars(46, 45, sc ? sc.stars : p.stars);
     text('POTENTIAL', 46, 54, C.dim);
@@ -281,7 +334,7 @@ export class PlayerScene {
       text(ATTR_LABEL[k], 134, y, '#fff');
       const v = sc ? null : p.attrs[k];
       if (v === null) text('??', 220, y, C.dim);
-      else { for (let j = 0; j < 10; j++) rect(220 + j * 11, y, 9, 5, j < v ? (v >= 8 ? C.gold : C.good) : '#333c57'); }
+      else { for (let j = 0; j < 10; j++) rect(220 + j * 11, y, 9, 5, j < v ? (v >= 8 ? C.gold : C.good) : '#4b5378'); }
       if (this.mode === 'roster' && p.skillPts > 0 && v < 10) UI.button(334, y - 2, 14, 9, '+', () => err(O.spendPoint(p, k)), { color: C.good });
     });
     // contract & stats
@@ -324,7 +377,7 @@ export class OfficeScene {
   draw() {
     const c = app.career;
     header('FRONT OFFICE', `CC ${c.cc}`);
-    ['FACILITIES', 'STAFF', 'FINANCE'].forEach((l, i) => UI.button(4 + i * 80, 19, 76, 14, l, () => { this.tab = i; }, { selected: this.tab === i, color: this.tab === i ? C.blue : '#333c57' }));
+    ['FACILITIES', 'STAFF', 'FINANCE'].forEach((l, i) => UI.button(4 + i * 80, 19, 76, 14, l, () => { this.tab = i; }, { selected: this.tab === i, color: this.tab === i ? C.blue : '#4b5378' }));
     if (this.tab === 0) {
       const info = { stadium: 'RAISES FAN RATING AND CC PER GAME', training: 'SPEEDS UP XP GAIN FOR ALL STARS', rehab: 'FASTER INJURY AND CONDITION RECOVERY' };
       Object.keys(info).forEach((k, i) => {
@@ -392,7 +445,7 @@ export class DraftScene {
     rosterRows(d.pool, 22, (p) => this.open(p), { scout: true, col4: 'POT', c4: (p, y) => text(`${p.scout.potLo}-${p.scout.potHi}`, 196, y, '#c2c3c7'), col5: '', c5: () => {} });
     d.pool.forEach((p, i) => UI.button(338, 29 + i * 12, 42, 10, 'PICK', () => this.pick(p), { color: C.good }));
     text('SCOUTED RATINGS ARE ESTIMATES (+-0.5). ROOKIE DEALS: 3 YEARS.', 8, 120, C.dim);
-    UI.button(8, 134, 110, 16, 'SKIP THIS PICK', () => { O.nextDraftRound(c); if (c.stage !== 'draft') hub(); }, { color: '#333c57' });
+    UI.button(8, 134, 110, 16, 'SKIP THIS PICK', () => { O.nextDraftRound(c); if (c.stage !== 'draft') hub(); }, { color: '#4b5378' });
     UI.button(124, 134, 110, 16, 'MANAGE ROSTER', () => app.go(new RosterScene()), { color: C.blue });
     if (d.picks.length) text(`DRAFTED: ${d.picks.map((id) => { const p = c.roster.find((x) => x.id === id); return p ? `${p.pos} ${p.last}` : '?'; }).join(', ')}`, 8, 160, C.good);
   }
@@ -476,7 +529,7 @@ export class ScheduleScene {
       const g = wk.find((x) => x.h === u || x.a === u);
       const x = i < 8 ? 6 : 196, y = 24 + (i % 8) * 22;
       const home = g.h === u, o = c.teams[home ? g.a : g.h];
-      rect(x, y, 182, 20, i === c.week && c.phase === 'regular' ? '#333c57' : '#1a1c2c');
+      rect(x, y, 182, 20, i === c.week && c.phase === 'regular' ? '#4b5378' : '#1a1c2c');
       rect(x, y, 4, 20, o.c1);
       text(`WK ${i + 1}`, x + 8, y + 3, C.dim); text(`${home ? 'VS' : 'AT'} ${o.city}`, x + 8, y + 11, '#fff');
       if (g.hs !== null) {
@@ -499,7 +552,7 @@ export class StandingsScene {
       text('W-L-T', x + 104, y + 6, C.dim); text('PF-PA', x + 140, y + 6, C.dim);
       divisionTeams(c, this.conf, d).forEach((t, i) => {
         const yy = y + 18 + i * 17, me = t.id === c.userTeamId;
-        if (me) rect(x + 3, yy - 3, 180, 13, '#333c57');
+        if (me) rect(x + 3, yy - 3, 180, 13, '#4b5378');
         rect(x + 6, yy - 2, 3, 11, t.c1);
         text(t.city, x + 12, yy, me ? C.gold : '#fff'); text(t.name, x + 12, yy + 6, C.dim);
         text(`${t.w}-${t.l}-${t.t}`, x + 104, yy + 2, '#fff'); text(`${t.pf}-${t.pa}`, x + 140, yy + 2, '#c2c3c7');
@@ -582,14 +635,14 @@ export class SettingsScene {
     const c = app.career, s = c.settings;
     header('SETTINGS');
     text('QUARTER LENGTH', 12, 26, C.gold);
-    [1, 2, 3].forEach((q, i) => UI.button(12 + i * 56, 34, 52, 16, `${q} MIN`, () => { s.qlen = q; }, { selected: s.qlen === q, color: s.qlen === q ? C.blue : '#333c57' }));
+    [1, 2, 3].forEach((q, i) => UI.button(12 + i * 56, 34, 52, 16, `${q} MIN`, () => { s.qlen = q; }, { selected: s.qlen === q, color: s.qlen === q ? C.blue : '#4b5378' }));
     text('DIFFICULTY', 12, 58, C.gold);
-    DIFFS.forEach((d, i) => UI.button(12 + i * 84, 66, 80, 16, d, () => { s.difficulty = d; }, { selected: s.difficulty === d, color: s.difficulty === d ? C.blue : '#333c57' }));
+    DIFFS.forEach((d, i) => UI.button(12 + i * 84, 66, 80, 16, d, () => { s.difficulty = d; }, { selected: s.difficulty === d, color: s.difficulty === d ? C.blue : '#4b5378' }));
     text('DYNAMIC DIFFICULTY', 12, 90, C.gold);
-    UI.button(12, 98, 80, 16, s.dynamic ? 'ON' : 'OFF', () => { s.dynamic = !s.dynamic; }, { color: s.dynamic ? C.good : '#333c57' });
+    UI.button(12, 98, 80, 16, s.dynamic ? 'ON' : 'OFF', () => { s.dynamic = !s.dynamic; }, { color: s.dynamic ? C.good : '#4b5378' });
     text(`CURRENT OFFSET ${c.dyn >= 0 ? '+' : ''}${c.dyn.toFixed(2)} (RISES WITH WINS)`, 100, 103, C.dim);
     text('SOUND', 12, 122, C.gold);
-    UI.button(12, 130, 80, 16, s.sound ? 'ON' : 'OFF', () => { s.sound = !s.sound; }, { color: s.sound ? C.good : '#333c57' });
+    UI.button(12, 130, 80, 16, s.sound ? 'ON' : 'OFF', () => { s.sound = !s.sound; }, { color: s.sound ? C.good : '#4b5378' });
     text('SAVE DATA (AUTOSAVES AFTER EVERY GAME AND MENU ACTION)', 12, 154, C.gold);
     UI.button(12, 162, 110, 16, 'EXPORT SAVE', () => { exportCareer(c); app.toast('SAVE EXPORTED AS JSON'); }, { color: C.blue });
     UI.button(128, 162, 110, 16, 'IMPORT SAVE', () => importCareer().then((nc) => { app.career = nc; saveCareer(nc); app.toast('SAVE IMPORTED'); hub(); }).catch((e) => app.toast(String(e.message || e).toUpperCase())), { color: '#5d275d' });

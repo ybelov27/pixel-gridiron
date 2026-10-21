@@ -61,6 +61,12 @@ export class Match {
     this.userDef = userDefRating(c);
     this.stats = {}; this.team = { pyds: 0, ryds: 0, oppYds: 0, plays: 0 };
     this.wind = Math.round(this.rng.range(-12, 12));
+    // weather & kickoff time: cold-weather home teams get snow late in the season
+    const home = c.teams[game.h];
+    const cold = ['IRONPORT', 'NORTHVALE', 'STORMRIDGE', 'FROSTBURG', 'KINGSBRIDGE', 'MAPLE RIDGE', 'YELLOWROCK', 'SILVERTON', 'CRESTWOOD'].includes(home.city);
+    const late = c.phase === 'playoffs' || c.week >= 10;
+    this.weather = cold && late && this.rng.chance(0.55) ? 'snow' : this.rng.chance(0.14) ? 'rain' : 'clear';
+    this.night = this.rng.chance(c.phase === 'playoffs' ? 0.6 : 0.33);
     this.phase = 'msg'; this.msg = ''; this.timer = 0; this.next_ = null;
     this.ot = null; this.runoff = 0; this.conv = false; this.play = null; this.kick = null;
     this.ballYard = 25; this.ballY = 26.67; this.down = 1; this.toGo = 10; this.fd = 35;
@@ -108,13 +114,28 @@ export class Match {
     this.sfx.push('kick'); this.play = null;
     const rng = this.rng;
     if (recv === 'u') {
-      if (rng.chance(0.012)) { this.score.u += 6; this.sfx.push('td'); return this.say('KICK RETURN TOUCHDOWN!', () => this.afterTD('u'), 2); }
-      const y = rng.chance(0.55) ? 25 : rng.int(15, 40);
-      this.say(y === 25 ? 'KICKOFF - TOUCHBACK' : `KICKOFF RETURNED TO THE ${y}`, () => this.startDrive(y));
+      if (rng.chance(0.35)) return this.say('KICKED THROUGH THE END ZONE - TOUCHBACK', () => this.startDrive(25));
+      return this.startReturn();
     } else {
       const y = rng.chance(0.55) ? 25 : rng.int(15, 40);
       this.say(y === 25 ? 'YOU KICK OFF - TOUCHBACK' : `YOU KICK OFF - RETURNED TO THEIR ${y}`, () => this.oppDrive(y));
     }
+  }
+  startReturn() {
+    this.play = new PlaySim({ mode: 'return', lineup: this.lineup, defRating: this.oppDef, diff: this.dp, rng: this.rng, weather: this.weather });
+    this.phase = 'live';
+    this.log(`${this.opp.abbr} KICK OFF`);
+  }
+  afterReturn(r) {
+    this.play.done = false;
+    if (r.kind === 'td') { this.score.u += 6; this.sfx.push('td'); return this.say('KICK RETURN TOUCHDOWN!', () => this.afterTD('u'), 2.2); }
+    if (r.kind === 'fumble') {
+      const oy = clamp(Math.round(100 - (r.x - 10)), 1, 99);
+      return this.say('FUMBLE ON THE RETURN!', () => this.next(() => this.oppDrive(oy)), 1.6);
+    }
+    if (r.kind === 'touchback') return this.say('TOUCHBACK', () => this.startDrive(25), 1.0);
+    const y = clamp(Math.round(r.x - 10), 1, 99);
+    this.say(`RETURNED TO ${yardText(y)}`, () => this.next(() => this.startDrive(y)), 1.2);
   }
   startDrive(yard) {
     this.ballYard = yard; this.ballY = 26.67; this.down = 1; this.toGo = Math.min(10, 100 - yard); this.fd = yard + this.toGo; this.runoff = 0;
@@ -133,7 +154,7 @@ export class Match {
     const late = (this.q >= 4 || this.q === 2) && this.clock < 30 && this.score.u <= this.score.o;
     const pl = choosePlay(this.rng, { down: this.down, toGo: this.toGo, yard: this.ballYard, late });
     this.play = new PlaySim({ play: pl, lineup: this.lineup, defRating: this.oppDef, losX: 10 + this.ballYard, ballY: this.ballY,
-      diff: this.dp, rng: this.rng, ocStars: this.c.coords.oc?.stars || 0 });
+      diff: this.dp, rng: this.rng, ocStars: this.c.coords.oc?.stars || 0, weather: this.weather });
     this.phase = 'presnap';
   }
   toGoText() { return this.ballYard + this.toGo >= 100 ? 'GOAL' : String(Math.max(1, Math.round(this.toGo))); }
@@ -163,6 +184,7 @@ export class Match {
     }
   }
   afterPlay(r) {
+    if (this.play.mode === 'return') return this.afterReturn(r);
     this.play.done = false; // consumed
     const wasConv = this.conv;
     if (!wasConv) this.recordPlay(r);
