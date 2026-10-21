@@ -82,7 +82,7 @@ export function extendPlayer(c, p, years = 3) {
 }
 export function releasePlayer(c, p) {
   c.roster = c.roster.filter((x) => x !== p);
-  c.expiring = c.expiring.filter((x) => x !== p);
+  c.expiring = c.expiring.filter((id) => id !== p.id);
   addNews(c, `RELEASED ${p.pos} ${displayName(p)}.`);
   syncUserTeamRatings(c);
 }
@@ -330,7 +330,7 @@ export function acceptOffer(c, teamId) {
   const rng = rngOf(c);
   c.userTeamId = teamId;
   const t = userTeam(c);
-  c.roster = genRoster(c, rng, Math.min(2.6, (t.off + t.def) / 2));
+  c.roster = genRoster(c, rng, Math.min(2.4, Math.max(2, (t.off + t.def) / 2 + 0.3)));
   saveRng(c, rng);
   c.cc = Math.floor(c.cc / 2); c.job = 50; c.fan = 45;
   c.facilities = { stadium: rng.int(1, 3), training: rng.int(1, 3), rehab: rng.int(1, 3) };
@@ -359,11 +359,11 @@ export function prepareResign(c, fresh = false) {
   }
   for (const k of Object.keys(c.facilities)) c.facilities[k] = Math.max(1, c.facilities[k] - 0.5);
   for (const t of c.teams) if (t.id !== c.userTeamId) {
-    t.off = Math.round(clamp(t.off + (2.9 - t.off) * 0.2 + rng.range(-0.45, 0.45), 1, 5) * 10) / 10;
-    t.def = Math.round(clamp(t.def + (2.9 - t.def) * 0.2 + rng.range(-0.45, 0.45), 1, 5) * 10) / 10;
+    t.off = Math.round(clamp(t.off + (2.25 - t.off) * 0.2 + rng.range(-0.45, 0.45), 1, 5) * 10) / 10;
+    t.def = Math.round(clamp(t.def + (2.25 - t.def) * 0.2 + rng.range(-0.45, 0.45), 1, 5) * 10) / 10;
   }
   saveRng(c, rng);
-  c.expiring = c.roster.filter((p) => p.years <= 0);
+  c.expiring = c.roster.filter((p) => p.years <= 0).map((p) => p.id);
   c.stage = 'resign';
 }
 export function resignPlayer(c, p) {
@@ -372,12 +372,14 @@ export function resignPlayer(c, p) {
   if (capRoom(c) + p.salary < ask) return 'NOT ENOUGH CAP ROOM';
   if (!spend(c, extendCC(p))) return 'NOT ENOUGH CC';
   p.salary = ask; p.years = 3; p.morale = clamp(p.morale + 5, 0, 100);
-  c.expiring = c.expiring.filter((x) => x !== p);
+  c.expiring = c.expiring.filter((id) => id !== p.id);
   addNews(c, `RE-SIGNED ${displayName(p)} (3 YRS, $${ask}M).`);
   return null;
 }
 export function finishResign(c) {
-  for (const p of c.expiring) {
+  for (const id of c.expiring) {
+    const p = c.roster.find((x) => x.id === id);
+    if (!p) continue;
     c.roster = c.roster.filter((x) => x !== p);
     addNews(c, `${p.pos} ${displayName(p)} LEFT IN FREE AGENCY.`);
   }

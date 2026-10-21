@@ -32,14 +32,12 @@ export function saveRng(c, r) { c.rng = r.s; }
 export const newId = (c) => c.nextId++;
 
 export function genRoster(c, rng, rating) {
-  // ~8 stars around the given team rating
+  // 9-10 stars spread over offense and defense, always better than a regular
   const roster = [];
-  const picks = ['QB', 'RB', 'WR', 'WR', 'OL', 'K', 'DL', 'LB', 'DB', rng.pick(['TE', 'DB', 'DL', 'WR'])];
-  rng.shuffle(picks.slice(1));
-  const n = rng.int(7, 9);
-  const chosen = ['QB', ...rng.shuffle(picks.slice(1)).slice(0, n - 1)];
+  const chosen = ['QB', 'RB', 'WR', 'WR', rng.pick(['TE', 'OL']), 'K', 'DL', 'LB', 'DB', rng.pick(['DL', 'DB', 'LB'])];
+  if (rng.chance(0.5)) chosen.push(rng.pick(['WR', 'OL', 'DL']));
   for (const pos of chosen) {
-    const st = clamp(Math.round((rating + rng.range(-0.9, 0.6)) * 2) / 2, 1, 4.5);
+    const st = clamp(Math.round((rating + rng.range(-0.6, 0.9)) * 2) / 2, 2, 4.5);
     roster.push(makePlayer(rng, pos, st, { id: newId(c) }));
   }
   return roster;
@@ -60,11 +58,11 @@ export function newCareer(o) {
   };
   c.teams = TEAM_DATA.map((d, i) => ({
     id: i, city: d[0], name: d[1], abbr: d[2], c1: d[3], c2: d[4], conf: Math.floor(i / 16), div: Math.floor(i / 4) % 4,
-    off: Math.round(rng.range(1.6, 4.2) * 10) / 10, def: Math.round(rng.range(1.6, 4.2) * 10) / 10, w: 0, l: 0, t: 0, pf: 0, pa: 0,
+    off: Math.round(rng.range(1.4, 3.1) * 10) / 10, def: Math.round(rng.range(1.4, 3.1) * 10) / 10, w: 0, l: 0, t: 0, pf: 0, pa: 0,
   }));
   if (o.random) c.userTeamId = rng.int(0, 31);
   const ut = c.teams[c.userTeamId];
-  c.roster = genRoster(c, rng, Math.min(2.8, (ut.off + ut.def) / 2));
+  c.roster = genRoster(c, rng, 2.5);
   c.coach.teams.push(ut.abbr);
   c.schedule = genSchedule(rng);
   saveRng(c, rng);
@@ -129,7 +127,7 @@ export function syncUserTeamRatings(c) {
 export function driveOutcome(rng, off, def, startYard, mod = 0) {
   const d = (off - def) * 0.07 + mod;
   const f = clamp((startYard - 25) / 75, -0.3, 1);
-  let pTD = clamp(0.2 + d + f * 0.35, 0.03, 0.85);
+  let pTD = clamp(0.18 + d + f * 0.35, 0.03, 0.85);
   let pFG = clamp(0.14 + f * 0.12 + d * 0.3, 0.04, 0.3);
   let pTO = clamp(0.11 - d * 0.4, 0.03, 0.25);
   let pDN = 0.05;
@@ -174,6 +172,7 @@ export function simGame(rng, A, B, allowTie = true, homeAdv = 0.15) {
 
 export function recordResult(c, g, hs, as, ot = false) {
   g.hs = hs; g.as = as; g.ot = ot;
+  if (c.phase === 'playoffs') return; // playoff games don't touch the regular-season table
   const H = c.teams[g.h], A = c.teams[g.a];
   H.pf += hs; H.pa += as; A.pf += as; A.pa += hs;
   if (hs > as) { H.w++; A.l++; } else if (as > hs) { A.w++; H.l++; } else { H.t++; A.t++; }

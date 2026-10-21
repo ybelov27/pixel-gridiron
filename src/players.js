@@ -21,7 +21,7 @@ export function starsOf(p) {
   return clamp(Math.round(avg) / 2, 0.5, 5);
 }
 export function salaryFor(stars, age = 26) {
-  let s = 2 + 2.4 * stars * stars;
+  let s = 1 + 1.6 * stars * stars;
   if (age >= 31) s *= 0.8;
   return Math.round(s * 10) / 10;
 }
@@ -53,7 +53,7 @@ export function makeRegular(pos, i = 0) {
   const key = pos + i;
   if (regCache[key]) return regCache[key];
   const attrs = {};
-  ATTRS[pos].forEach((k, j) => attrs[k] = 2 + ((i + j) % 2));
+  ATTRS[pos].forEach((k, j) => attrs[k] = 3 + ((i + j) % 3 === 0 && j === 3 ? 1 : 0));
   const p = { id: null, regular: true, first: '', last: 'REGULAR', pos, attrs, condition: 100, morale: 70, skin: (i * 3 + pos.length) % 4 };
   p.stars = starsOf(p);
   return (regCache[key] = p);

@@ -65,7 +65,7 @@ This file sums up what I could find about how the reference game (Retro Bowl, Ne
 - Player meeting: 1 CC for +20 morale. Rest/recovery session: 1 CC for +35 condition.
 - Contract extensions cost 1 + ⌊stars/2⌋ CC, plus the asking salary has to fit under the cap.
 - Raising the salary cap costs 5 CC per +$10M.
-- The salary cap starts at $200M and counts only star players. Salary is roughly $2M + 2.4 × stars² M.
+- The salary cap starts at $200M and counts only star players. Salary is roughly $1M + 1.6 × stars² M, so a fresh 10-star roster costs about $120–150M.
 - Free agents are higher-star veterans. Signing one costs ⌈stars × 2⌉ CC plus their salary under the cap.
 - The draft has 3 rounds each offseason. Each round shows its own prospect list with scouting fuzz (stars ±0.5, potential shown as a range), and no CPU team takes your pick. Rookies sign 3-year cheap deals.
 
