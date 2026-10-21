@@ -1,5 +1,5 @@
 // Career persistence: localStorage autosave + JSON export/import.
-import { SAVE_VERSION } from './league.js';
+import { SAVE_VERSION, migrateCareer } from './league.js';
 export const SAVE_KEY = 'pixelgridiron.career.v1';
 
 export function serialize(c) { return JSON.stringify(c); }
@@ -12,7 +12,7 @@ export function deserialize(str) {
   c.pending ||= []; c.news ||= []; c.history ||= []; c.freeAgents ||= []; c.expiring ||= [];
   c.coords ||= { oc: null, dc: null }; c.settings ||= { qlen: 2, difficulty: 'MEDIUM', dynamic: true, sound: true };
   c.dyn ??= 0;
-  return c;
+  return migrateCareer(c);
 }
 function store() { try { return window.localStorage; } catch (_) { return null; } }
 export function saveCareer(c) {

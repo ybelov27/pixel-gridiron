@@ -56,7 +56,7 @@ export class Match {
     this.score = { u: 0, o: 0 }; this.to = { u: 3, o: 3 };
     this.rng = new RNG((c.rng ^ (c.week * 7919 + c.year * 104729 + this.opp.id * 31)) >>> 0);
     this.dp = diffParams(c);
-    this.lineup = buildLineup(c.roster);
+    this.lineup = buildLineup(c.roster, c.regulars);
     this.oppOff = this.opp.off + this.dp.cpu; this.oppDef = this.opp.def + this.dp.cpu;
     this.userDef = userDefRating(c);
     this.stats = {}; this.team = { pyds: 0, ryds: 0, oppYds: 0, plays: 0 };
@@ -77,7 +77,23 @@ export class Match {
   get K() { return this.lineup.K[0]; }
   st(p) { if (!p || !p.id) return null; return (this.stats[p.id] ||= {}); }
   inc(p, k, n = 1) { const s = this.st(p); if (s) s[k] = (s[k] || 0) + n; }
-  say(text, next, dur = 1.4) { this.phase = 'msg'; this.msg = text; this.timer = dur; this.next_ = next; this.log(text); }
+  say(text, next, dur = 1.4) {
+    if (this.injNote) { const note = this.injNote, after = next; this.injNote = null; next = () => this.say(note, after, 2.2); }
+    this.phase = 'msg'; this.msg = text; this.timer = dur; this.next_ = next; this.log(text);
+  }
+  // a star can get hurt on contact; the next banner announces it and a regular takes his spot
+  maybeInjure(p, chance) {
+    if (!p || !p.id || p.injury || !this.rng.chance(chance + (100 - (p.condition ?? 100)) * 0.0002)) return;
+    const reh = this.c.facilities.rehab;
+    const w = Math.max(1, Math.ceil(this.rng.int(1, 5) * (1.15 - reh * 0.1)));
+    const where = this.rng.pick(['ANKLE', 'KNEE', 'SHOULDER', 'HAMSTRING', 'CONCUSSION', 'WRIST', 'RIBS']);
+    p.injury = w;
+    (this.injured ||= []).push(p.id);
+    (this.injuries ||= []).push([`${p.pos} ${displayName(p)}`, w]);
+    this.rebuildLineup();
+    this.injNote = `INJURY! - ${p.pos} ${displayName(p)} (${where}) OUT ${w} WK${w > 1 ? 'S' : ''}`;
+    this.sfx.push('groan');
+  }
   log(t) { this.feed.unshift(t); if (this.feed.length > 6) this.feed.length = 6; }
   choice(title, options) { this.phase = 'choice'; this.choiceTitle = title; this.options = options; }
   skip() { if (this.phase === 'msg') this.timer = 0; if (this.phase === 'opp') this.oppFast = true; }
@@ -156,6 +172,7 @@ export class Match {
     this.play = new PlaySim({ play: pl, lineup: this.lineup, defRating: this.oppDef, losX: 10 + this.ballYard, ballY: this.ballY,
       diff: this.dp, rng: this.rng, ocStars: this.c.coords.oc?.stars || 0, weather: this.weather });
     this.phase = 'presnap';
+    if (!this.conv) this.checkpoint({ k: 'snap' });
   }
   toGoText() { return this.ballYard + this.toGo >= 100 ? 'GOAL' : String(Math.max(1, Math.round(this.toGo))); }
   snap() {
@@ -188,6 +205,7 @@ export class Match {
     this.play.done = false; // consumed
     const wasConv = this.conv;
     if (!wasConv) this.recordPlay(r);
+    if (r.kind === 'tackle' || r.kind === 'fumble') this.maybeInjure(r.sack ? this.lineup.QB[0] : r.carrier, r.sack ? 0.006 : 0.0035);
     const endYard = r.x - 10;
     if (wasConv) {
       this.conv = false;
@@ -324,6 +342,7 @@ export class Match {
   oppDrive(start) {
     if (this.over) return;
     this.play = null;
+    this.checkpoint({ k: 'opp', start });
     const rng = this.rng;
     let out = driveOutcome(rng, this.oppOff, this.userDef, start, this.dp.sim);
     let time = out.plays * rng.int(6, 9);
@@ -368,6 +387,8 @@ export class Match {
       if (rng.chance(0.6)) { if (db) this.inc(db, 'dint'); lines.push(`INTERCEPTED${db ? ' BY ' + displayName(db) : ''}!`); }
       else lines.push(`FUMBLE! RECOVERED${db ? ' BY ' + displayName(db) : ''}!`);
     } else lines.push(final);
+    const hurt = defStars.length && rng.chance(0.012) ? rng.pick(defStars) : null;
+    if (hurt) { this.maybeInjure(hurt, 1); if (hurt.injury) lines.splice(Math.max(0, lines.length - 1), 0, `INJURY: ${displayName(hurt)} IS HURT`); }
     this.oppState = { out, lines, pos, shown: 0, t: 0, start, time, clockStart: this.clock };
     this.oppFast = false;
     this.phase = 'opp';
@@ -432,8 +453,36 @@ export class Match {
     for (const pos of ['QB', 'RB', 'WR', 'TE', 'OL']) for (const p of this.lineup[pos]) { s += p.stars * (pos === 'QB' ? 3 : 1); n += pos === 'QB' ? 3 : 1; }
     return s / n + (this.c.coords.oc?.stars || 0) * 0.12;
   }
+  // ---------- in-game autosave ----------
+  // A checkpoint is taken before every snap and every opponent drive; the scene persists it with the career.
+  checkpoint(next) {
+    this.saved = {
+      v: 1, h: this.g.h, a: this.g.a, q: this.q, clock: this.clock, score: { ...this.score }, to: { ...this.to },
+      ballYard: this.ballYard, ballY: this.ballY, down: this.down, toGo: this.toGo, fd: this.fd, goForIt: !!this.goForIt,
+      stats: JSON.parse(JSON.stringify(this.stats)), team: { ...this.team }, ot: this.ot ? JSON.parse(JSON.stringify(this.ot)) : null,
+      firstRecv: this.firstRecv, weather: this.weather, night: this.night, wind: this.wind, rng: this.rng.s, injured: [...(this.injured || [])], next,
+    };
+    if (this.onCheckpoint) this.onCheckpoint(this.saved);
+  }
+  static resume(c, game, s) {
+    const m = new Match(c, game);
+    m.sfx.length = 0; m.feed.length = 0;
+    Object.assign(m, { q: s.q, clock: s.clock, score: { ...s.score }, to: { ...s.to }, ballYard: s.ballYard, ballY: s.ballY, down: s.down,
+      toGo: s.toGo, fd: s.fd, goForIt: s.goForIt, stats: s.stats, team: s.team, ot: s.ot, firstRecv: s.firstRecv,
+      weather: s.weather, night: s.night, wind: s.wind, injured: s.injured || [] });
+    m.rng.s = s.rng;
+    if (m.injured.length) m.rebuildLineup();
+    const q = m.q <= 4 ? `Q${m.q}` : 'OT';
+    if (s.next.k === 'opp') m.say(`GAME RESUMED - ${q}`, () => m.oppDrive(s.next.start), 1.6);
+    else m.say(`GAME RESUMED - ${q}`, () => m.toPresnap(), 1.6);
+    return m;
+  }
+  rebuildLineup() {
+    const out = new Set(this.injured || []);
+    this.lineup = buildLineup(this.c.roster.filter((p) => !out.has(p.id)), this.c.regulars);
+  }
   result() {
-    return { us: this.score.u, them: this.score.o, ot: this.q >= 5, stats: this.stats, oppId: this.opp.id };
+    return { us: this.score.u, them: this.score.o, ot: this.q >= 5, stats: this.stats, oppId: this.opp.id, injuries: this.injuries || [] };
   }
 }
 export function yardText(y) { y = Math.round(y); return y === 50 ? 'THE 50' : y < 50 ? `OWN ${y}` : `OPP ${100 - y}`; }

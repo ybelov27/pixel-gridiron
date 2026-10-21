@@ -76,13 +76,14 @@ test('full games draw every frame type (field, aim, kicks, returns, defense, fin
     console.log(`      seed ${seed}: ${m.score.u}-${m.score.o}, phases ${[...seen].join(',')}, ${calls.n} draw calls`);
   }
 });
-test('weather, night and kick view draw', () => {
+test('weather, night, field-goal and side-view PAT draw', () => {
   const c = newCareer({ seed: 21, teamId: 2 }); app.career = c; startSeason(c);
   for (const [w, night] of [['snow', true], ['rain', false]]) {
     const m = new Match(c, userGameThisWeek(c)); m.weather = w; m.night = night;
     const sc = new GameScene(m, () => {});
     for (let i = 0; i < 300; i++) { if (m.phase === 'presnap') m.snap(); sc.update(1 / 60); if (i % 5 === 0) sc.draw(); }
     m.startKick('fg', 40); for (let i = 0; i < 200; i++) { if (i === 30 || i === 70) m.kick.tap(); sc.update(1 / 60); sc.draw(); }
+    m.startKick('pat', 33); for (let i = 0; i < 200 && m.phase === 'kick'; i++) { if (i === 30 || i === 70) m.kick.tap(); sc.update(1 / 60); sc.draw(); }
   }
 });
 console.log(`\n${passed} render tests passed${process.exitCode ? ' - SOME FAILED' : ''}`);

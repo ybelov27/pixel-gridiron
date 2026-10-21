@@ -11,7 +11,22 @@ import { TitleScene } from './scenes/menus.js';
 const STEP = 1 / 60;
 initCanvas(document.getElementById('c'));
 initInput(getCanvas());
-app.autosave = () => { if (app.career) saveCareer(app.career); };
+let saveFailWarned = false;
+app.autosave = () => {
+  if (!app.career) return;
+  if (saveCareer(app.career)) app.savedT = 1.2;
+  else if (!saveFailWarned) { saveFailWarned = true; app.toast('COULD NOT SAVE - STORAGE IS FULL OR BLOCKED', 4); }
+};
+// save whenever the app is backgrounded, switched away from, or closed (iOS kills home-screen apps silently)
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') app.autosave(); });
+addEventListener('pagehide', () => app.autosave());
+addEventListener('beforeunload', () => app.autosave());
+setInterval(() => app.autosave(), 15000);
+// ask the browser not to evict our saves
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist().catch(() => {}); } catch (_) {}
+// Android / desktop Chrome install prompt
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); app.installPrompt = e; });
+addEventListener('appinstalled', () => { app.installPrompt = null; app.toast('INSTALLED! OPEN IT FROM YOUR HOME SCREEN'); });
 
 // iOS: block pinch-zoom, double-tap zoom and rubber-band scrolling outside the canvas
 for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => e.preventDefault());
@@ -91,6 +106,7 @@ function step() {
   if (app.scene && app.scene.update && !app.modal) app.scene.update(STEP);
   if (app.toastT > 0) app.toastT -= STEP;
   if (app.fadeT > 0) app.fadeT -= STEP;
+  if (app.savedT > 0) app.savedT -= STEP;
 }
 function render() {
   const W = G.W, H = G.H;
@@ -109,6 +125,11 @@ function render() {
     G.ctx.restore(); UI.ox = 0; UI.oy = 0;
   }
   if (app.fadeT > 0) rect(0, 0, W, H, `rgba(11,13,28,${Math.min(1, app.fadeT / 0.2)})`);
+  if (app.savedT > 0 && !(sc && sc.full)) { // small "saved" tick in the corner of menu screens
+    const x = W - 40 - G.SAFE.r, y = H - 11 - G.SAFE.b;
+    rect(x, y, 36, 9, 'rgba(11,13,28,0.85)'); text('SAVED', x + 20, y + 2, `rgba(60,207,106,${Math.min(1, app.savedT * 2)})`, 1, 'center');
+    rect(x + 3, y + 4, 1, 1, '#3ccf6a'); rect(x + 4, y + 5, 1, 1, '#3ccf6a'); rect(x + 5, y + 4, 1, 1, '#3ccf6a'); rect(x + 6, y + 3, 1, 1, '#3ccf6a');
+  }
   if (app.modal) { UI.begin(); drawModal(); }
   if (app.toastT > 0) {
     const tw = Math.min(W - 20, app.toastText.length * 4 + 16);

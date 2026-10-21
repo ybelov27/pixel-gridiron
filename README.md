@@ -7,7 +7,11 @@ The game recreates the loop of a classic mobile retro-football title. Everything
 
 **https://ybelov27.github.io/pixel-gridiron/**
 
-It plays in landscape on iPhone, iPad, Android and desktop. On iPhone or iPad, open the link in Safari, then choose **Share → Add to Home Screen**. That gives you a fullscreen app icon that keeps working offline. The game fills the whole screen at a crisp integer pixel scale and keeps the HUD clear of the notch.
+It plays in landscape on iPhone, iPad, Android and desktop.
+
+**Add it to your Home Screen.** On iPhone or iPad, open the link in Safari (or Chrome), tap **Share → Add to Home Screen → Add**, then launch it from the icon. It runs fullscreen and keeps working offline. The **+ HOME SCREEN** button on the title screen (and in MENU) shows these steps. On Android and desktop Chrome, the same button becomes a one-tap **INSTALL APP**. The Home Screen app keeps its own save, separate from the browser tab. To move a career over, use MENU → Export Save in the browser, then Import Save in the app.
+
+**It always autosaves.** The game saves after every menu action and every game, before every snap and every opponent drive, every 15 seconds, and whenever you switch away from or close the app. If you leave mid-game, the Hub (or CONTINUE on the title screen) offers **RESUME** with the quarter, clock, score, down and stats intact. The pause menu also has **SAVE & EXIT**. The game fills the whole screen at a crisp integer pixel scale and keeps the HUD clear of the notch.
 
 ## Run it
 
@@ -36,7 +40,8 @@ ES modules don't load from `file://`, so you need a server. Your career autosave
 | Juke | Swipe up / down | W / S, ↑ / ↓ |
 | Stutter (slow) | Swipe back | A / ← |
 | Dive | Swipe forward | D / → |
-| Field goal / PAT | Tap once to lock aim, tap again to lock power | Space |
+| Field goal | Behind-the-kicker view: tap to lock aim, tap again for power | Space |
+| Extra point (PAT) | Side-on view on the field: tap to lock aim, tap again for power | Space |
 | Timeout | `TO` button (stops between-play runoff) | T |
 | Pause / sim rest of game | `II` button | Esc / P |
 | Skip message or opponent drive | Tap | Space |
@@ -46,6 +51,8 @@ The play is chosen for you. Before the snap, each receiver's route is drawn as a
 ## What's in it
 
 - **Look:** a chunky outlined 5×7 pixel font, outlined player sprites with helmet stripes and run cycles, crowd stands that bounce on big plays, end zones with team names, a midfield logo, a scoreboard HUD, a TOUCHDOWN banner with confetti, screen shake, dust, floating yardage, and weather (snow late in the season at cold-weather stadiums, rain) and night games.
+- **Skills:** every star has a signature skill (CANNON, SNIPER, BURNER, SURE HANDS, BULLDOZER, BALL HAWK, BIG LEG…) that boosts one attribute, shown on the player card. Non-star depth players are real named individuals with their own ratings.
+- **Injuries:** stars can get hurt during a game on tackles, sacks and defensive drives. A banner announces it, a backup takes over, and the player misses real weeks (Rehab shortens it).
 - **Ratings:** every player has an overall rating (OVR, 40–99). It shows over skill players and defenders on the field, and in the roster, player cards, free agency and the draft.
 - **On field:** 11 v 11 side-scrolling field. Routes, man and deep-zone coverage with reaction lag, a pass rush against your OL, sacks, catches, drops, deflections and interceptions. When a pass is in the air, every nearby receiver and defender breaks toward the landing spot. Also playable kickoff returns, hand-offs, jukes, stutters, dives, broken tackles, fumbles, safeties, out of bounds, 26 auto-selected plays, a FG/PAT aim and power mini-game with wind, punts, kickoffs, onside kicks, 2-point tries and 4th-down decisions. Opponent drives are simulated as a ticker.
 - **Rules:** selectable 1/2/3-minute quarters, a clock that stops on incompletions, out of bounds, scores and turnovers, a 6-second runoff between plays, 3 timeouts per half, and OT (see Known deviations).

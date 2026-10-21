@@ -6,9 +6,9 @@ import { app } from '../app.js';
 import { sfx } from '../audio.js';
 import { TEAM_DATA, CONFS, CONF_ABBR, DIVS } from '../data.js';
 import { newCareer, userTeam, teamName, DIFFS, WEEKS, userGameThisWeek, divisionTeams, ROUND_NAMES, teamRatings, diffParams, userEliminated } from '../league.js';
-import { ATTRS, ATTR_LABEL, MAX_STARS, displayName, xpForLevel, buildLineup, ovr, ovrColor } from '../players.js';
+import { ATTRS, ATTR_LABEL, MAX_STARS, displayName, xpForLevel, buildLineup, ovr, ovrColor, traitInfo } from '../players.js';
 import * as O from '../office.js';
-import { startSeason, status, simUserGame, finishUserGame, simRound, opponentOf } from '../flow.js';
+import { startSeason, status, simUserGame, finishUserGame, simRound, opponentOf, resumableGame } from '../flow.js';
 import { Match } from '../match.js';
 import { GameScene } from './game.js';
 import { saveCareer, loadCareer, hasSave, deleteSave, exportCareer, importCareer } from '../save.js';
@@ -42,6 +42,33 @@ function toggleFullscreen() {
   else { const r = (el.requestFullscreen || el.webkitRequestFullscreen).call(el); if (r && r.catch) r.catch(() => {}); try { screen.orientation.lock('landscape').catch(() => {}); } catch (_) {} }
 }
 
+// start (or resume) this week's game; every between-play checkpoint is saved with the career
+export function launchGame(c, g, snap = null) {
+  const m = snap ? Match.resume(c, g, snap) : new Match(c, g);
+  m.onCheckpoint = (s) => { c.inGame = { h: g.h, a: g.a, phase: c.phase, week: c.week, round: c.playoffs ? c.playoffs.round : -1, snap: s }; app.autosave(); };
+  const sc = new GameScene(m, (res) => {
+    const s = finishUserGame(c, g, res); saveCareer(c); app.go(new PostGameScene(s));
+  });
+  sc.onExit = () => { app.autosave(); app.toast('GAME SAVED - TAP RESUME TO CONTINUE'); hub(); };
+  app.go(sc);
+}
+// how to put the game on the home screen
+export function installHelp() {
+  if (app.installPrompt) { const p = app.installPrompt; app.installPrompt = null; p.prompt(); return; }
+  const lines = isIOS() ? [
+    '1. OPEN THIS PAGE IN SAFARI (OR CHROME) ON YOUR IPHONE / IPAD.',
+    '2. TAP THE SHARE BUTTON (SQUARE WITH AN UP ARROW).',
+    '3. SCROLL DOWN AND TAP "ADD TO HOME SCREEN", THEN "ADD".',
+    '4. OPEN GRIDIRON FROM YOUR HOME SCREEN: FULLSCREEN, WORKS OFFLINE.',
+    'NOTE: THE HOME SCREEN APP KEEPS ITS OWN SAVE. TO MOVE A CAREER, USE MENU > EXPORT SAVE HERE, THEN IMPORT SAVE IN THE APP.',
+  ] : [
+    'IN CHROME OR EDGE: OPEN THE BROWSER MENU AND CHOOSE "INSTALL APP" OR "ADD TO HOME SCREEN".',
+    'ON IPHONE / IPAD: SAFARI > SHARE > ADD TO HOME SCREEN.',
+    'THE INSTALLED APP RUNS FULLSCREEN AND WORKS OFFLINE.',
+  ];
+  app.modal = { title: 'ADD TO HOME SCREEN', lines, buttons: [{ label: 'GOT IT', fn: () => {} }] };
+}
+
 // ===================================================================== TITLE (full screen)
 export class TitleScene {
   constructor() { this.t = 0; this.full = true; this.noAutosave = true; }
@@ -73,13 +100,16 @@ export class TitleScene {
     if (hasSave()) {
       UI.button(bx0, y, bw, 22, 'CONTINUE', () => {
         const c = loadCareer(); if (!c) return app.toast('SAVE IS CORRUPT');
-        app.career = c; hub();
+        app.career = c;
+        const r = resumableGame(c);
+        if (r) launchGame(c, r.g, r.snap); else hub();
       }, { color: '#2fa84f' }); y += 26;
     }
     UI.button(bx0, y, bw, 22, 'NEW CAREER', () => app.go(new NewCareerScene())); y += 26;
     UI.button(bx0, y, bw, 18, 'IMPORT SAVE', () => importCareer().then((c) => { app.career = c; saveCareer(c); app.toast('SAVE IMPORTED'); hub(); }).catch((e) => app.toast(String(e.message || e).toUpperCase())), { color: '#7e2553' });
     if (canFullscreen()) UI.button(SW - 70 - G.SAFE.r, 4 + G.SAFE.t, 66, 16, 'FULLSCREEN', toggleFullscreen, { color: '#4b5378', small: true });
-    const hint = isIOS() && !standalone() ? 'TIP: SHARE > ADD TO HOME SCREEN TO PLAY FULLSCREEN, EVEN OFFLINE' : 'AN ORIGINAL RETRO FOOTBALL GAME - WORKS OFFLINE';
+    if (!standalone()) UI.button(4 + G.SAFE.l, 4 + G.SAFE.t, 104, 16, app.installPrompt ? 'INSTALL APP' : '+ HOME SCREEN', installHelp, { color: '#2fa84f', small: true });
+    const hint = isIOS() && !standalone() ? 'TIP: SHARE > ADD TO HOME SCREEN TO PLAY FULLSCREEN, EVEN OFFLINE' : 'AUTOSAVES CONSTANTLY - WORKS OFFLINE';
     rect(0, SH - 12 - G.SAFE.b, SW, 12 + G.SAFE.b, 'rgba(11,13,28,0.75)');
     text(hint, SW / 2, SH - 8 - G.SAFE.b, '#fff', 1, 'center');
   }
@@ -206,8 +236,13 @@ export class HubScene {
       row(100, 'OFFENSE', me.off, o.off + dp.cpu); row(109, 'DEFENSE', me.def, o.def + dp.cpu);
       const inj = c.roster.filter((p) => p.injury).length;
       if (inj) text(`${inj} STAR(S) INJURED`, 120, 120, C.bad, 1, 'center');
-      UI.button(X, 132, 152, 38, '', () => this.play(c, g), { color: C.good });
-      big('PLAY', X + 76, 146, '#fff', { align: 'center', scale: 2 });
+      const rs = resumableGame(c);
+      UI.button(X, 132, 152, 38, '', () => this.play(c, g), { color: rs ? '#ff9f1c' : C.good });
+      if (rs) {
+        const sn = rs.snap, q = sn.q <= 4 ? `Q${sn.q}` : 'OT';
+        big('RESUME', X + 76, 138, '#fff', { align: 'center', scale: 2 });
+        text(`${q}  ${t.abbr} ${sn.score.u} - ${sn.score.o} ${o.abbr}`, X + 76, 156, '#fff', 1, 'center');
+      } else big('PLAY', X + 76, 146, '#fff', { align: 'center', scale: 2 });
       UI.button(X + 158, 132, R - X - 162, 38, 'SIM', () => { const s = simUserGame(c); saveCareer(c); app.go(new PostGameScene(s)); }, { color: '#4b5378' });
       return;
     }
@@ -242,10 +277,8 @@ export class HubScene {
   }
   play(c, g) {
     if (!c.roster.some((p) => p.pos === 'K')) app.toast('NO STAR KICKER - A REGULAR WILL KICK');
-    const m = new Match(c, g);
-    app.go(new GameScene(m, (res) => {
-      const s = finishUserGame(c, g, res); saveCareer(c); app.go(new PostGameScene(s));
-    }));
+    const r = resumableGame(c);
+    launchGame(c, g, r ? r.snap : null);
   }
 }
 
@@ -300,7 +333,7 @@ export class RosterScene {
     header('ROSTER', `${c.roster.length}/${MAX_STARS} STARS  CAP ${money(O.capRoom(c))} LEFT`);
     const list = c.roster.slice().sort((a, b) => POS_ORDER.indexOf(a.pos) - POS_ORDER.indexOf(b.pos) || b.stars - a.stars);
     rosterRows(list, 22, (p) => app.go(new PlayerScene(p, 'roster', () => app.go(new RosterScene()))));
-    const lu = buildLineup(c.roster);
+    const lu = buildLineup(c.roster, c.regulars);
     const empty = POS_ORDER.filter((pos) => lu[pos].some((p) => p.regular)).join(' ');
     text('REGULARS START AT: ' + (empty || '-'), 8, H - 10, C.dim);
   }
@@ -343,6 +376,8 @@ export class PlayerScene {
     if (this.mode === 'roster') text(`EXTEND ASK ${money(O.askSalary(p))} / ${O.extendCC(p)} CC`, 134, 94, C.dim);
     if (this.mode === 'fa') text(`SIGNING COST ${O.faCC(p)} CC`, 134, 94, C.gold);
     if (p.tradeReq) text('HAS REQUESTED A TRADE', 134, 103, C.bad);
+    const tr = traitInfo(p);
+    if (tr) { rect(250, 84, 126, 30, '#0b0d1c'); rect(251, 85, 124, 28, '#2a2f63'); big(tr[0], 256, 88, '#ffd23f', { shadow: false }); text(tr[2], 256, 99, '#fff'); text(`+${ATTR_LABEL[tr[1]]}`, 256, 106, '#3ccf6a'); }
     panel(4, 124, 376, 52);
     text('SEASON', 10, 129, C.gold); text('CAREER', 10, 151, C.gold);
     if (p.season) { text(statLine(p, p.season), 10, 138, '#fff'); text(statLine(p, p.career), 10, 160, '#fff'); }
@@ -643,7 +678,8 @@ export class SettingsScene {
     text(`CURRENT OFFSET ${c.dyn >= 0 ? '+' : ''}${c.dyn.toFixed(2)} (RISES WITH WINS)`, 100, 103, C.dim);
     text('SOUND', 12, 122, C.gold);
     UI.button(12, 130, 80, 16, s.sound ? 'ON' : 'OFF', () => { s.sound = !s.sound; }, { color: s.sound ? C.good : '#4b5378' });
-    text('SAVE DATA (AUTOSAVES AFTER EVERY GAME AND MENU ACTION)', 12, 154, C.gold);
+    text('SAVE DATA - AUTOSAVES EVERY PLAY, EVERY MENU ACTION AND WHEN YOU LEAVE', 12, 154, C.gold);
+    UI.button(250, 130, 120, 16, app.installPrompt ? 'INSTALL APP' : '+ HOME SCREEN', installHelp, { color: '#2fa84f' });
     UI.button(12, 162, 110, 16, 'EXPORT SAVE', () => { exportCareer(c); app.toast('SAVE EXPORTED AS JSON'); }, { color: C.blue });
     UI.button(128, 162, 110, 16, 'IMPORT SAVE', () => importCareer().then((nc) => { app.career = nc; saveCareer(nc); app.toast('SAVE IMPORTED'); hub(); }).catch((e) => app.toast(String(e.message || e).toUpperCase())), { color: '#5d275d' });
     UI.button(244, 162, 110, 16, 'DELETE SAVE', () => app.confirm('DELETE SAVE?', ['THIS ERASES YOUR CAREER FROM THIS BROWSER. THIS CANNOT BE UNDONE.'], () => { deleteSave(); app.career = null; app.go(new TitleScene()); }, 'DELETE'), { color: '#b13e53' });

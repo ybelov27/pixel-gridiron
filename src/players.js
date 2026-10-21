@@ -14,6 +14,19 @@ export const SLOTS = { QB: 1, RB: 1, WR: 3, TE: 1, OL: 5, K: 1, DL: 4, LB: 3, DB
 export const OFF_POS = ['QB', 'RB', 'WR', 'TE', 'OL'];
 export const DEF_POS = ['DL', 'LB', 'DB'];
 export const MAX_STARS = 12;
+// signature skills: each star gets one; it boosts one attribute (see eff)
+export const TRAITS = {
+  QB: [['CANNON', 'ARM', 'LAUNCHES DEEP BALLS FASTER AND FARTHER'], ['SNIPER', 'ACC', 'PINPOINT ACCURACY'], ['SCRAMBLER', 'SPD', 'EXTRA SPEED WHEN RUNNING']],
+  RB: [['BULLDOZER', 'STR', 'BREAKS MORE TACKLES'], ['BURNER', 'SPD', 'EXTRA BREAKAWAY SPEED'], ['SOFT HANDS', 'CAT', 'RELIABLE PASS CATCHER']],
+  WR: [['BURNER', 'SPD', 'BEATS DEFENDERS DEEP'], ['SURE HANDS', 'CAT', 'RARELY DROPS A PASS'], ['POSSESSION', 'STR', 'WINS CONTESTED CATCHES']],
+  TE: [['SURE HANDS', 'CAT', 'RARELY DROPS A PASS'], ['BULLDOZER', 'STR', 'BREAKS MORE TACKLES'], ['SEAM THREAT', 'SPD', 'FAST FOR HIS SIZE']],
+  OL: [['ANCHOR', 'BLK', 'HOLDS BLOCKS LONGER'], ['MAULER', 'STR', 'OVERPOWERS RUSHERS'], ['IRONMAN', 'STA', 'NEVER TIRES']],
+  K: [['BIG LEG', 'LEG', 'EXTRA FIELD GOAL RANGE'], ['ICE COLD', 'CMP', 'STEADY AIM UNDER PRESSURE'], ['METRONOME', 'ACC', 'SLOWER AIM SWING']],
+  DL: [['PASS RUSHER', 'RSH', 'MORE SACKS'], ['RUN STUFFER', 'STR', 'CLOGS RUNNING LANES'], ['HIT MAN', 'TKL', 'SURE TACKLER']],
+  LB: [['HIT MAN', 'TKL', 'SURE TACKLER'], ['SIDELINE', 'SPD', 'COVERS GROUND FAST'], ['COVER LB', 'COV', 'SHADOWS TIGHT ENDS']],
+  DB: [['BALL HAWK', 'COV', 'MORE INTERCEPTIONS'], ['SHUTDOWN', 'SPD', 'STAYS WITH FAST RECEIVERS'], ['ENFORCER', 'TKL', 'BIG HITTER']],
+};
+export function traitInfo(p) { return p.trait && TRAITS[p.pos] ? TRAITS[p.pos].find((t) => t[0] === p.trait) : null; }
 
 export function starsOf(p) {
   const a = ATTRS[p.pos].map((k) => p.attrs[k]);
@@ -55,6 +68,15 @@ export function makePlayer(rng, pos, stars, o = {}) {
   p.pot = o.pot ?? clamp(Math.round((p.stars + rng.range(0, 1.2) + youth * rng.range(0.5, 2.5)) * 2) / 2, p.stars, 5);
   if (p.pot < p.stars) p.pot = p.stars;
   p.salary = o.salary ?? salaryFor(p.stars, age);
+  p.trait = rng.pick(TRAITS[pos])[0];
+  return p;
+}
+// a club's non-star depth players: real names, their own (modest) ratings
+export function makeRegularPlayer(rng, pos, i) {
+  const attrs = {};
+  ATTRS[pos].forEach((k) => attrs[k] = clamp(Math.round(3 + rng.gauss() * 0.8), 2, 4));
+  const p = { id: null, rid: `${pos}${i}`, regular: true, first: rng.pick(FIRST), last: rng.pick(LAST), pos, attrs, condition: 100, morale: 70, skin: rng.int(0, 3), age: rng.int(22, 31) };
+  p.stars = starsOf(p);
   return p;
 }
 const regCache = {};
@@ -67,22 +89,26 @@ export function makeRegular(pos, i = 0) {
   p.stars = starsOf(p);
   return (regCache[key] = p);
 }
-export function displayName(p) { return p.regular ? pos3(p.pos) + ' REG' : `${p.first[0]}. ${p.last}`; }
+export function displayName(p) { return p.regular && !p.first ? pos3(p.pos) + ' REG' : `${p.first[0]}. ${p.last}`; }
 const pos3 = (p) => p;
 
 // effective attribute after condition and morale
 export function eff(p, a) {
-  const base = p.attrs[a] ?? 3;
+  let base = p.attrs[a] ?? 3;
+  const t = p.trait && traitInfo(p);
+  if (t && t[1] === a) base += 1.5;
   const cond = p.condition ?? 100, mor = p.morale ?? 70;
   return base * (0.75 + 0.25 * cond / 100) * (0.92 + 0.08 * mor / 100);
 }
 
-export function buildLineup(roster) {
+export function buildLineup(roster, regulars = null) {
   const lu = {};
   for (const pos of POSITIONS) {
     const avail = roster.filter((p) => p.pos === pos && !p.injury).sort((a, b) => b.stars - a.stars);
+    const subs = regulars && regulars[pos] ? regulars[pos] : [];
     lu[pos] = [];
-    for (let i = 0; i < SLOTS[pos]; i++) lu[pos].push(avail[i] || makeRegular(pos, i));
+    let r = 0;
+    for (let i = 0; i < SLOTS[pos]; i++) lu[pos].push(avail[i] || subs[r++] || makeRegular(pos, i));
   }
   return lu;
 }
@@ -93,7 +119,7 @@ export function unitRating(lu, side) {
   for (const pos of poss) for (const p of lu[pos]) {
     const wt = side === 'off' ? OFF_W[pos] : 1;
     const cf = 0.8 + 0.2 * (p.condition ?? 100) / 100;
-    s += p.stars * cf * wt; w += wt;
+    s += (p.stars + (p.trait ? 0.2 : 0)) * cf * wt; w += wt;
   }
   return s / w;
 }

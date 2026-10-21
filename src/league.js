@@ -1,7 +1,7 @@
 // League structure: career creation, schedule, standings, sims, playoffs, difficulty.
 import { RNG, clamp, lerp } from './rng.js';
 import { TEAM_DATA, COACH_FIRST, LAST } from './data.js';
-import { makePlayer, buildLineup, unitRating, POSITIONS } from './players.js';
+import { makePlayer, buildLineup, unitRating, POSITIONS, SLOTS, makeRegularPlayer, TRAITS } from './players.js';
 
 export const WEEKS = 16;
 export const SAVE_VERSION = 1;
@@ -44,6 +44,20 @@ export function genRoster(c, rng, rating) {
   return roster;
 }
 
+export function genRegulars(rng) {
+  const out = {};
+  for (const pos of POSITIONS) out[pos] = Array.from({ length: SLOTS[pos] + 1 }, (_, i) => makeRegularPlayer(rng, pos, i));
+  return out;
+}
+// bring older saves up to date: named regulars and a skill for every star
+export function migrateCareer(c) {
+  const rng = rngOf(c);
+  if (!c.regulars) c.regulars = genRegulars(rng);
+  const fix = (p) => { if (p && !p.trait && TRAITS[p.pos]) p.trait = rng.pick(TRAITS[p.pos])[0]; };
+  c.roster.forEach(fix); (c.freeAgents || []).forEach(fix); (c.draft?.pool || []).forEach(fix);
+  saveRng(c, rng);
+  return c;
+}
 export function newCareer(o) {
   const seed = o.seed ?? (Date.now() & 0x7fffffff);
   const rng = new RNG(seed);
@@ -64,6 +78,7 @@ export function newCareer(o) {
   if (o.random) c.userTeamId = rng.int(0, 31);
   const ut = c.teams[c.userTeamId];
   c.roster = genRoster(c, rng, 2.5);
+  c.regulars = genRegulars(rng);
   c.coach.teams.push(ut.abbr);
   c.schedule = genSchedule(rng);
   saveRng(c, rng);
@@ -112,8 +127,8 @@ export function genSchedule(rng) {
   return order.map((i) => weeks[i].map((g) => ({ ...g, hs: null, as: null, ot: false })));
 }
 
-export function userOffRating(c) { return unitRating(buildLineup(c.roster), 'off') + (c.coords.oc?.stars || 0) * 0.12; }
-export function userDefRating(c) { return unitRating(buildLineup(c.roster), 'def') + (c.coords.dc?.stars || 0) * 0.15; }
+export function userOffRating(c) { return unitRating(buildLineup(c.roster, c.regulars), 'off') + (c.coords.oc?.stars || 0) * 0.12; }
+export function userDefRating(c) { return unitRating(buildLineup(c.roster, c.regulars), 'def') + (c.coords.dc?.stars || 0) * 0.15; }
 export function teamRatings(c, id) {
   if (id === c.userTeamId) return { off: userOffRating(c), def: userDefRating(c) };
   const t = c.teams[id];

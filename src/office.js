@@ -2,7 +2,7 @@
 import { clamp } from './rng.js';
 import { COACH_FIRST, LAST, FIRST } from './data.js';
 import { makePlayer, starsOf, salaryFor, xpForLevel, addStats, newStats, MAX_STARS, ATTRS, buildLineup, POSITIONS, displayName } from './players.js';
-import { rngOf, saveRng, addNews, userTeam, newId, genSchedule, seedPlayoffs, pct, genRoster, syncUserTeamRatings, ROUND_NAMES, userEliminated, teamName, WEEKS } from './league.js';
+import { rngOf, saveRng, addNews, userTeam, newId, genSchedule, seedPlayoffs, pct, genRoster, genRegulars, syncUserTeamRatings, ROUND_NAMES, userEliminated, teamName, WEEKS } from './league.js';
 
 export const COSTS = { meet: 1, rest: 1, capRaise: 5, capStep: 10 };
 export const capUsed = (c) => Math.round(c.roster.reduce((s, p) => s + p.salary, 0) * 10) / 10;
@@ -174,7 +174,7 @@ export function postGame(c, info) {
   c.job = clamp(c.job + (won ? 2 : tie ? 0 : -2) + (won && upset > 0.5 ? 1 : 0) + (!won && !tie && upset < -0.5 ? -1 : 0) + (info.title ? 10 : 0), 0, 100);
   if (won) { c.coach.wins++; } else if (tie) c.coach.ties++; else c.coach.losses++;
   c.dyn = clamp(c.dyn + (won ? 0.05 + (margin >= 14 ? 0.05 : 0) : tie ? 0 : -0.08), -0.5, 1);
-  const lu = buildLineup(c.roster);
+  const lu = buildLineup(c.roster, c.regulars);
   const starters = new Set(Object.values(lu).flat().filter((p) => !p.regular));
   const trainF = 0.6 + c.facilities.training * 0.2;
   for (const p of c.roster) {
@@ -193,7 +193,7 @@ export function postGame(c, info) {
       while (p.xp >= xpForLevel(p.level)) { p.xp -= xpForLevel(p.level); p.level++; p.skillPts++; sum.levelUps.push(p); }
       const sta = p.attrs.STA ?? 5;
       p.condition = clamp(p.condition - (18 + (10 - sta) * 2.2), 5, 100);
-      const pInj = 0.025 + (100 - p.condition) / 100 * 0.08;
+      const pInj = 0.012 + (100 - p.condition) / 100 * 0.05;
       if (rng.chance(pInj)) {
         const w = Math.max(1, Math.ceil(rng.int(1, 6) * (1.15 - c.facilities.rehab * 0.1)));
         p.injury = w; sum.injuries.push([p, w]);
@@ -206,7 +206,7 @@ export function postGame(c, info) {
   if (rng.chance(0.4)) c.pending.push(makeEvent(c, rng, 'press'));
   saveRng(c, rng);
   syncUserTeamRatings(c);
-  c.lastSummary = { ...sum, xp: sum.xp.map(([p, x]) => [displayName(p), x]), injuries: sum.injuries.map(([p, w]) => [displayName(p), w]), levelUps: sum.levelUps.map(displayName) };
+  c.lastSummary = { ...sum, xp: sum.xp.map(([p, x]) => [displayName(p), x]), injuries: [...(info.injuries || []), ...sum.injuries.map(([p, w]) => [displayName(p), w])], levelUps: sum.levelUps.map(displayName) };
   return c.lastSummary;
 }
 export function weekly(c) {
@@ -331,6 +331,7 @@ export function acceptOffer(c, teamId) {
   c.userTeamId = teamId;
   const t = userTeam(c);
   c.roster = genRoster(c, rng, Math.min(2.4, Math.max(2, (t.off + t.def) / 2 + 0.3)));
+  c.regulars = genRegulars(rng);
   saveRng(c, rng);
   c.cc = Math.floor(c.cc / 2); c.job = 50; c.fan = 45;
   c.facilities = { stadium: rng.int(1, 3), training: rng.int(1, 3), rehab: rng.int(1, 3) };

@@ -234,23 +234,24 @@ export function icon(name, x, y, color = '#fff') {
 
 // ---------- player sprites: fill art auto-outlined -> 10x16 ----------
 // h helmet, s helmet stripe, l logo, m facemask, f face, j jersey, n number band, a arm, p pants, k socks, b shoes
-const HEAD = ['..ssss..', '.hhhhhh.', 'hhhhlhhm', 'hhhhhfmm', '.hhhffm.', '..jjff..'];
+// compact 6x10 fill art -> 8x12 with the auto outline
+const HEAD = ['.ssss.', 'hhhlhm', 'hhhhfm', '.hhff.'];
 const TORSO = {
-  n: ['.jjjjjj.', 'jjjnnjjj', 'ajjnnjja', 'ajjjjjja'],   // arms at sides
-  a: ['.jjjjjja', 'jjjnnjja', 'ajjnnjj.', '.jjjjjj.'],   // front arm forward, back arm back
-  c: ['ajjjjjj.', 'ajjnnjjj', '.jjnnjja', '.jjjjjja'],   // opposite swing
-  t: ['.jjjjjj.', 'jjjnnjja', '.jjnnjj.', '.jjjjjj.'],   // throwing (rear arm raised, see THROW_HEAD)
-  u: ['.jjjjjj.', '.jjnnjj.', '.jjnnjj.', '.jjjjjj.'],   // arms up (catch / celebrate)
+  n: ['jjnnjj', 'ajnnja', '.jjjj.'],   // arms at sides
+  a: ['jjnnja', 'ajnnj.', '.jjjj.'],   // arm swing
+  c: ['ajnnjj', '.jnnja', '.jjjj.'],   // opposite swing
+  t: ['jjnnja', '.jnnj.', '.jjjj.'],   // throwing (rear arm raised, see THROW_HEAD)
+  u: ['.jnnj.', '.jnnj.', '.jjjj.'],   // arms up (catch / celebrate)
 };
-const THROW_HEAD = ['..ssss..', '.hhhhhh.', 'ahhhlhhm', 'ahhhhfmm', 'ahhhffm.', '.ajjff..'];
+const THROW_HEAD = ['.ssss.', 'ahhlhm', 'ahhhfm', '.hhff.'];
+const UP_HEAD = ['a....a', 'assssa', 'hhhlhm', 'hhhhfm', '.hhff.'];
 const LEGS = [
-  ['.pppppp.', '.pp..pp.', '.kk..kk.', '.bb..bbb'], // stand
-  ['.pppppp.', 'pp....pp', 'kk.....k', 'bb.....b'], // stride
-  ['.pppppp.', '..pppp..', '..kkkk..', '..bbbbb.'], // passing / feet together
-  ['.pppppp.', 'pp....pp', 'k.....kk', 'b.....bb'], // stride 2
+  ['.pppp.', '.k..k.', '.b..bb'], // stand
+  ['pp..pp', 'k....k', 'b....b'], // stride
+  ['.pppp.', '..kk..', '..bbb.'], // feet together
+  ['pp..pp', 'k....k', 'bb...b'], // stride 2
 ];
-const UP_HEAD = ['a......a', 'a.ssss.a', 'ahhhhhha', 'hhhhlhhm', 'hhhhhfmm', '.hhhffm.', '..jjff..'];
-const DOWN = ['..............', '.ss...........', 'hhhh.aa.......', 'hhhhjjjjjpppkb', 'mhffjjnnjpppkb', '.mf.aa........'];
+const DOWN = ['ss.........', 'hhhjjjjppkb', 'hfmjnnjppkb', '.f.aa......'];
 const OUTLINE = '#10101a';
 const SKINS = ['#f2c39b', '#c98c5a', '#8d5a35', '#5c3a21'];
 const spriteCache = new Map();

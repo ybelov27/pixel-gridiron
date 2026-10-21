@@ -5,7 +5,8 @@ import { eff } from './players.js';
 
 export const FW = 53.33;
 export const spdOf = (v) => 6.0 + v * 0.32;
-export const maxThrow = (arm) => 25 + arm * 4.5;
+// every QB can go deep; a strong arm adds range and zip rather than gating the deep ball
+export const maxThrow = (arm) => 52 + arm * 2.2;
 const RAD = Math.PI / 180;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -16,8 +17,9 @@ export function throwError(rng, acc, d, bullet) {
   return { ang: rng.gauss() * angSd, d: rng.gauss() * dSd };
 }
 // ball flight: lob is slow and high, bullet fast and flat
-export function flightOf(d, bullet) {
-  return bullet ? { T: 0.12 + d / 34, peak: 0.5 + d * 0.035 } : { T: 0.35 + d / 22, peak: 1.5 + d * 0.2 };
+export function flightOf(d, bullet, arm = 5) {
+  const zip = 1.1 - arm * 0.02; // arm 10 -> 10% faster, arm 2 -> 6% slower
+  return bullet ? { T: (0.12 + d / 34) * zip, peak: 0.5 + d * 0.035 } : { T: (0.35 + d / 22) * zip, peak: 1.5 + d * 0.2 };
 }
 
 export function makeDefender(rating, i, rng) {
@@ -117,7 +119,7 @@ export class PlaySim {
   aimTarget(dxScreen, dyScreen, SX, SY) {
     // slingshot: target opposite of drag vector
     const qb = this.QB;
-    let tx = qb.x + dxScreen * 2.6 / SX, ty = qb.y + dyScreen * 2.0 / SY;
+    let tx = qb.x + dxScreen * 3.4 / SX, ty = qb.y + dyScreen * 2.6 / SY;
     const d = Math.hypot(tx - qb.x, ty - qb.y), m = maxThrow(eff(qb.p, 'ARM'));
     if (d > m) { tx = qb.x + (tx - qb.x) * m / d; ty = qb.y + (ty - qb.y) * m / d; }
     return { x: tx, y: ty, d: Math.min(d, m), max: m };
@@ -128,7 +130,7 @@ export class PlaySim {
     // aim assist: pull the target toward where the receiver you were leading will be
     const assist = this.diff.assist ?? 0;
     if (assist > 0) {
-      const T0 = flightOf(Math.hypot(tx - qb.x, ty - qb.y), bullet).T;
+      const T0 = flightOf(Math.hypot(tx - qb.x, ty - qb.y), bullet, eff(qb.p, 'ARM')).T;
       let best = null, bd = 5;
       for (const r of this.receivers) {
         if (r.block || r.run) continue;
@@ -141,7 +143,7 @@ export class PlaySim {
     const err = throwError(this.rng, eff(qb.p, 'ACC'), d0, bullet);
     const ang = Math.atan2(ty - qb.y, tx - qb.x) + err.ang;
     const d = Math.max(2, d0 + err.d);
-    const fl = flightOf(d, bullet);
+    const fl = flightOf(d, bullet, eff(qb.p, 'ARM'));
     this.thrown = true;
     this.ball = { state: 'air', x0: qb.x, y0: qb.y, x1: qb.x + Math.cos(ang) * d, y1: qb.y + Math.sin(ang) * d, t: 0, T: fl.T, peak: fl.peak, bullet, x: qb.x, y: qb.y, z: 2 };
     // placement error (behind / high / off-line) makes the catch harder even if the receiver gets there

@@ -25,7 +25,7 @@ export function opponentOf(c, g) { return c.teams[g.h === c.userTeamId ? g.a : g
 
 // quick box-score style stats for a simulated user game
 function simStats(c, rng, us) {
-  const lu = buildLineup(c.roster), st = {};
+  const lu = buildLineup(c.roster, c.regulars), st = {};
   const add = (p, k, v) => { if (!p.id) return; (st[p.id] ||= {}); st[p.id][k] = (st[p.id][k] || 0) + v; };
   const tds = Math.floor(us / 7), fg = Math.floor((us % 7) / 3);
   const qb = lu.QB[0], rb = lu.RB[0];
@@ -44,6 +44,7 @@ function simStats(c, rng, us) {
   return st;
 }
 export function simUserGame(c) {
+  c.inGame = null;
   const g = userGameThisWeek(c);
   const rng = rngOf(c);
   const dp = diffParams(c);
@@ -57,6 +58,7 @@ export function simUserGame(c) {
   return finishUserGame(c, g, { us, them: th, ot: r.ot, stats, oppId: opp.id });
 }
 export function finishUserGame(c, g, res) {
+  c.inGame = null;
   const home = g.h === c.userTeamId;
   const playoff = c.phase === 'playoffs';
   const round = playoff ? c.playoffs.round : -1;
@@ -86,6 +88,12 @@ function advance(c) {
     advancePlayoffs(c);
     if (c.playoffs.champion !== null) addNews(c, `${teamName(c.teams[c.playoffs.champion])} ARE PIXEL BOWL CHAMPIONS.`);
   }
+}
+// the saved mid-game snapshot, if it belongs to this week's game
+export function resumableGame(c) {
+  const g = userGameThisWeek(c), s = c.inGame;
+  if (!g || !s || s.h !== g.h || s.a !== g.a || s.phase !== c.phase || s.week !== c.week || s.round !== (c.playoffs ? c.playoffs.round : -1)) return null;
+  return { g, snap: s.snap };
 }
 export function simRound(c) {
   const rng = rngOf(c);

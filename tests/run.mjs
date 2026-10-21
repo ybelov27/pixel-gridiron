@@ -1,13 +1,13 @@
 // Headless tests: node tests/run.mjs
 import assert from 'node:assert/strict';
 import { RNG } from '../src/rng.js';
-import { throwError, PlaySim, flightOf } from '../src/play.js';
+import { throwError, PlaySim, flightOf, maxThrow } from '../src/play.js';
 import { PLAYS } from '../src/playbook.js';
 import { buildLineup, makePlayer } from '../src/players.js';
 import { newCareer, diffParams, userGameThisWeek } from '../src/league.js';
 import { Match } from '../src/match.js';
 import * as O from '../src/office.js';
-import { status, startSeason, simUserGame, simRound, finishUserGame } from '../src/flow.js';
+import { status, startSeason, simUserGame, simRound, finishUserGame, resumableGame } from '../src/flow.js';
 import { serialize, deserialize } from '../src/save.js';
 
 let passed = 0;
@@ -175,6 +175,43 @@ test('two full seasons: playoffs, draft, re-sign, firing/hiring, save round-trip
   runCareer(a, 1, false); runCareer(b, 1, false);
   assert.equal(serialize(a), serialize(b), 'same save -> same future (seeded RNG)');
   assert.equal(a.year, 4);
+});
+test('a game in progress survives closing the app and resumes where it left off', () => {
+  const c = newCareer({ seed: 77, teamId: 9, qlen: 2 });
+  startSeason(c);
+  const g = userGameThisWeek(c);
+  const m = new Match(c, g);
+  m.onCheckpoint = (s) => { c.inGame = { h: g.h, a: g.a, phase: c.phase, week: c.week, round: -1, snap: s }; };
+  // play until the second quarter, then "close the app"
+  autopilot(m, 60 * 60 * 3);
+  let guard = 0;
+  while (m.q < 2 && m.phase !== 'final' && guard++ < 60 * 60 * 20) { if (m.phase === 'presnap') m.snap(); else if (m.phase === 'choice') m.options.find((x) => !x.disabled).fn(); else if (m.phase === 'kick') m.kick.tap(); m.update(1 / 60); }
+  assert.ok(c.inGame, 'checkpoints should be recorded');
+  const before = c.inGame.snap;
+  const reloaded = deserialize(serialize(c));          // app killed and reopened
+  const r = resumableGame(reloaded);
+  assert.ok(r, 'the saved game should be resumable');
+  const m2 = Match.resume(reloaded, r.g, r.snap);
+  assert.equal(m2.q, before.q); assert.deepEqual(m2.score, before.score); assert.equal(m2.down, before.down);
+  autopilot(m2);
+  assert.equal(m2.phase, 'final');
+  assert.ok(m2.score.u >= before.score.u && m2.score.o >= before.score.o);
+  finishUserGame(reloaded, r.g, m2.result());
+  assert.equal(reloaded.inGame, null, 'finishing clears the snapshot');
+  console.log(`      saved at Q${before.q} ${before.score.u}-${before.score.o}, finished ${m2.score.u}-${m2.score.o}`);
+});
+test('old saves get named regulars and player skills on load', () => {
+  const c = newCareer({ seed: 3, teamId: 1 });
+  delete c.regulars; c.roster.forEach((p) => delete p.trait);
+  const c2 = deserialize(serialize(c));
+  assert.ok(c2.regulars && c2.regulars.QB.length >= 2 && c2.regulars.QB[0].last);
+  assert.ok(c2.roster.every((p) => p.trait));
+  const lu = buildLineup(c2.roster, c2.regulars);
+  assert.ok(Object.values(lu).flat().every((p) => p.last && p.last !== 'REGULAR'), 'every lineup slot is a named player');
+});
+test('every QB can throw deep; arm strength adds zip', () => {
+  assert.ok(maxThrow(2) >= 55);
+  assert.ok(flightOf(40, false, 10).T < flightOf(40, false, 2).T);
 });
 test('deserialize rejects garbage', () => {
   assert.throws(() => deserialize('{"hello":1}'));

@@ -45,7 +45,8 @@ export class GameScene {
     // camera
     let target = this.camX;
     const p = m.play;
-    if (m.phase === 'opp') target = 10 + (100 - m.oppMarker());
+    if (m.phase === 'kick' && m.kick && m.kick.kind === 'pat') target = 108;
+    else if (m.phase === 'opp') target = 10 + (100 - m.oppMarker());
     else if (p && (m.phase === 'live' || m.phase === 'msg')) {
       if (p.ball.state === 'air' || p.ball.state === 'kick') target = p.ball.x + (p.mode === 'return' ? 6 : 4);
       else if (p.carrier) target = p.carrier.x + 9;
@@ -180,6 +181,7 @@ export class GameScene {
     this.shx = this.shake > 0 ? Math.round((Math.random() - 0.5) * 4) : 0;
     this.shy = this.shake > 0 ? Math.round((Math.random() - 0.5) * 3) : 0;
     rect(0, 0, W, H, '#0b0d1c');
+    if (m.phase === 'kick' && m.kick.kind === 'pat') { this.drawStands(); this.drawField(); this.drawKickSide(); this.drawHUD(); this.drawParts(); return; }
     if (m.phase === 'kick') { this.drawKick(); this.drawHUD(); this.drawParts(); return; }
     this.drawStands();
     this.drawField();
@@ -377,22 +379,21 @@ export class GameScene {
         if (!p.started && off && fr === 0) lift = Math.floor(this.t * 2 + e.y) % 2; // pre-snap bounce
       }
       // shadow shrinks as the player leaves the ground
-      rect(x - 4 + Math.min(2, lift >> 1), y - 1, 9 - Math.min(4, lift), 3, 'rgba(0,0,0,0.28)');
-      rect(x - 3, y - 2, 7, 1, 'rgba(0,0,0,0.18)');
+      rect(x - 3 + Math.min(2, lift >> 1), y - 1, 7 - Math.min(4, lift), 2, 'rgba(0,0,0,0.3)');
       // juke after-images
       if (e === p.carrier && e.jukeT > 0 && e.trail.length > 12) {
         const n = e.trail.length, ctx = G.ctx;
         ctx.globalAlpha = 0.28;
-        for (const back of [10, 20]) { const tx = this.sx(e.trail[n - back - 2]), ty = this.sy(e.trail[n - back - 1]); drawSprite(playerSprite(T.c1, T.c2, fr, face, e.p.skin || 0, pants), tx - 5, ty - 15); }
+        for (const back of [10, 20]) { const tx = this.sx(e.trail[n - back - 2]), ty = this.sy(e.trail[n - back - 1]); const gi = playerSprite(T.c1, T.c2, fr, face, e.p.skin || 0, pants); drawSprite(gi, tx - 4, ty - gi.height + 1); }
         ctx.globalAlpha = 1;
       }
       const img = playerSprite(T.c1, T.c2, fr, face, e.p.skin || 0, pants);
       y -= lift;
-      if (fr === 5 || fr === 7) drawSprite(img, x - 8, y - 8); else drawSprite(img, x - 5, y - img.height + 1);
-      const headY = fr === 6 ? y - 17 : y - 15;
-      if (off && e.star && fr !== 5 && fr !== 7) starIcon(x - 2, headY - 7, '#ffd23f');
+      if (fr === 5 || fr === 7) drawSprite(img, x - 6, y - 6); else drawSprite(img, x - 4, y - img.height + 1);
+      const headY = fr === 6 ? y - 13 : y - 11;
+      if (off && e.star && fr !== 5 && fr !== 7) starIcon(x - 2, headY - 6, '#ffd23f');
       // rating badge over skill players and defenders
-      if (!down && fr !== 7 && !['OL', 'DL', 'BLK'].includes(e.role) && (m.phase === 'presnap' || m.phase === 'live') && !p.result) {
+      if (!down && fr !== 7 && !['OL', 'DL', 'BLK'].includes(e.role) && m.phase === 'presnap') {
         const v = e.ov ?? (e.ov = ovr(e.p)), by = headY - (off && e.star ? 15 : 9);
         rect(x - 6, by, 13, 7, '#0b0d1c'); rect(x - 5, by + 1, 11, 5, off ? shadeColor(T.c1, 0.55) : '#3a1018');
         text(String(v), x + 1, by + 1, ovrColor(v), 1, 'center');
@@ -419,14 +420,14 @@ export class GameScene {
       if (b.state === 'air') { const tx = this.sx(b.x1), ty = this.sy(b.y1), rr = 3 + (1 - Math.min(1, left)) * 2; for (let a = 0; a < 14; a++) px(tx + Math.cos(a / 14 * 6.283 + this.t * 3) * rr * 1.3, ty + Math.sin(a / 14 * 6.283 + this.t * 3) * rr * 0.75, 'rgba(255,236,39,0.85)'); }
     } else {
       this.ballTrail.length = 0;
-      if (b.state === 'carried' && p.carrier && !(p.carrier.down && p.result)) ballSprite(this.sx(p.carrier.x) + 3, this.sy(p.carrier.y) - 8, 0);
+      if (b.state === 'carried' && p.carrier && !(p.carrier.down && p.result)) ballSprite(this.sx(p.carrier.x) + 3, this.sy(p.carrier.y) - 6, 0);
       else if (b.state === 'held' && p.QB && p.mode !== 'return') {
         // snap: the ball travels from the center to the QB
         const u = p.started ? Math.min(1, p.t / 0.22) : 0, ctr = p.OL ? p.OL[2] : p.QB;
         const qx = this.sx(p.QB.x) + 3, qy = this.sy(p.QB.y) - (this.g ? 12 : 8);
         const cx2 = this.sx(ctr.x) + 2, cy2 = this.sy(ctr.y) - 3;
         ballSprite(cx2 + (qx - cx2) * u, cy2 + (qy - cy2) * u - Math.sin(u * Math.PI) * 4, u < 1 ? spin : 0);
-      } else if (b.state === 'carried' && !p.carrier && p.KR) ballSprite(this.sx(p.KR.x) + 3, this.sy(p.KR.y) - 8, 0);
+      } else if (b.state === 'carried' && !p.carrier && p.KR) ballSprite(this.sx(p.KR.x) + 3, this.sy(p.KR.y) - 6, 0);
     }
   }
   drawWeather() {
@@ -535,7 +536,7 @@ export class GameScene {
   }
   banner(s) {
     const W = G.W, cy = Math.round((this.FT + this.fieldB) / 2) - 14;
-    const hot = /TOUCHDOWN|INTERCEPT|FUMBLE|SAFETY|FIRST DOWN|SACKED|GOOD!|VICTORY/.test(s);
+    const hot = /TOUCHDOWN|INTERCEPT|FUMBLE|SAFETY|FIRST DOWN|SACKED|GOOD!|VICTORY|INJURY/.test(s);
     let sc = hot && bigWidth(s, 2) <= W - 30 ? 2 : 1;
     const main = s.replace(/ - .*/, '').trim(), sub = s.includes(' - ') ? s.slice(s.indexOf(' - ') + 3) : '';
     if (bigWidth(main, sc) > W - 20) sc = 1;
@@ -578,16 +579,69 @@ export class GameScene {
   drawPause() {
     const m = this.m, W = G.W, H = G.H;
     rect(0, 0, W, H, 'rgba(5,6,18,0.7)');
-    const w = 200, h = 136, x = Math.floor((W - w) / 2), y = Math.floor((H - h) / 2);
+    const w = 200, h = 160, x = Math.floor((W - w) / 2), y = Math.floor((H - h) / 2);
     panel(x, y, w, h);
     big('PAUSED', W / 2, y + 7, '#ffd23f', { align: 'center', scale: 2 });
     UI.button(x + 20, y + 30, w - 40, 20, 'RESUME', () => { this.paused = false; }, { color: '#2fa84f' });
     UI.button(x + 20, y + 54, w - 40, 20, 'SIM REST OF GAME', () => { this.paused = false; if (m.phase !== 'final') m.simRest(); }, { color: '#4b5378' });
     UI.button(x + 20, y + 78, w - 40, 20, `SOUND ${app.career.settings.sound ? 'ON' : 'OFF'}`, () => { app.career.settings.sound = !app.career.settings.sound; }, { color: '#2f6fe0' });
-    text('KEYS: SPACE SNAP  H HANDOFF  WASD / ARROWS', W / 2, y + 108, '#9aa3cf', 1, 'center');
-    text('B BULLET  T TIMEOUT  ESC PAUSE', W / 2, y + 117, '#9aa3cf', 1, 'center');
+    if (this.onExit) UI.button(x + 20, y + 102, w - 40, 20, 'SAVE & EXIT', () => { this.paused = false; this.onExit(); }, { color: '#7e2553' });
+    text('KEYS: SPACE SNAP  H HANDOFF  WASD / ARROWS', W / 2, y + 132, '#9aa3cf', 1, 'center');
+    text('B BULLET  T TIMEOUT  ESC PAUSE', W / 2, y + 141, '#9aa3cf', 1, 'center');
   }
-  // behind-the-kicker view for FG / PAT
+  // side-on view for the extra point: same aim + power taps, played out on the normal field
+  drawKickSide() {
+    const m = this.m, k = m.kick, W = G.W, H = G.H;
+    const spotX = 120 - k.dist, cy = FW / 2, face = 1;
+    const pants = '#e9e9e9', opPants = shadeColor(m.opp.c2 === '#111111' ? '#555555' : m.opp.c2, 0.75);
+    // line of scrimmage at the 2 (snap 7 yards in front of the hold spot)
+    const los = spotX + 7;
+    const people = [];
+    for (let i = -3; i <= 3; i++) {
+      people.push([los - 0.7, cy + i * 1.2, m.me.c1, m.me.c2, 1, pants, 0]);
+      people.push([los + 0.8, cy + i * 1.25, m.opp.c1, m.opp.c2, -1, opPants, k.stage === 'flight' ? [1, 2, 3, 2][Math.floor(this.t * 9 + i) % 4] : 0]);
+    }
+    people.push([spotX + 0.6, cy + 0.4, m.me.c1, m.me.c2, 1, pants, 5]); // holder down on a knee (lying pose reads as kneeling)
+    people.push([spotX - 1.2 + (k.stage === 'flight' ? Math.min(1, k.u * 4) * 1.2 : 0), cy - 0.6, m.me.c1, m.me.c2, 1, pants, k.stage === 'flight' && k.u < 0.25 ? 1 : 0]);
+    people.sort((a, b) => a[1] - b[1]);
+    for (const [x, y, c1, c2, f, pt, fr] of people) {
+      const sx = this.sx(x), sy = this.sy(y), img = playerSprite(c1, c2, fr, f, 0, pt);
+      rect(sx - 4, sy - 1, 9, 3, 'rgba(0,0,0,0.28)');
+      if (fr === 5) drawSprite(img, sx - 6, sy - 6); else drawSprite(img, sx - 4, sy - img.height + 1);
+    }
+    const bx0 = this.sx(spotX), by0 = this.sy(cy) - 3;
+    if (k.stage !== 'flight') {
+      // aim marker sweeps across the uprights: where the ball would cross the goal line
+      const ang = (k.stage === 'aim' ? k.ang : k.lockAng) * Math.PI / 180;
+      const latAt = Math.tan(ang) * k.dist + m.wind * k.dist * 0.012 * 0; // wind shown separately
+      const gx = this.sx(120), gy = this.sy(cy + latAt);
+      line(bx0, by0, gx, gy - 20, 'rgba(255,236,39,0.9)', 2);
+      const lo = this.sy(cy - 3.08), hi = this.sy(cy + 3.08);
+      rect(gx - 5, lo - 20, 2, hi - lo, 'rgba(255,255,255,0.25)');
+      rect(gx - 7, gy - 21, 5, 3, '#0b0d1c'); rect(gx - 6, gy - 20, 3, 1, Math.abs(latAt) <= 3.08 ? '#3ccf6a' : '#ff4d5e');
+      ballSprite(bx0, by0, 2);
+      // power bar
+      const bw = 120, bx = Math.floor((W - bw) / 2), by = this.fieldB - 16;
+      panel(bx - 4, by - 14, bw + 8, 26);
+      text(k.stage === 'aim' ? 'TAP TO LOCK AIM' : 'TAP TO KICK', W / 2, by - 10, '#fff', 1, 'center');
+      rect(bx, by - 2, bw, 8, '#0b0d1c'); rect(bx + 1, by - 1, bw - 2, 6, '#1b2045');
+      const need = Math.min(1, k.dist / k.maxRange);
+      rect(bx + need * bw, by - 4, 1, 12, '#ff4d5e');
+      if (k.stage === 'power') rect(bx + 1, by - 1, (bw - 2) * k.power, 6, k.power > 0.92 ? '#ff9f1c' : '#3ccf6a');
+    } else {
+      const u = Math.min(1.25, k.u), reach = Math.min(k.range, k.dist * 1.25);
+      const x = spotX + reach * u, lat = k.lateral * (reach * u / k.dist);
+      const peak = 7 * Math.min(1, k.range / k.dist);
+      const z = Math.max(0, 0.5 + 4 * peak * u * (1 - u * 0.8));
+      const sx = this.sx(x), syg = this.sy(cy + lat);
+      rect(sx - 2, syg, 4, 1, 'rgba(0,0,0,0.4)');
+      ballSprite(sx, this.sy(cy + lat, z) - 3, Math.floor(this.t * 14) % 3);
+      if (k.u > 1) this.banner(k.good ? "IT'S GOOD!" : k.why);
+    }
+    // wind
+    text(`WIND ${Math.abs(m.wind)} MPH ${m.wind < 0 ? '<' : m.wind > 0 ? '>' : ''}`, 6 + G.SAFE.l, this.FT + 4, '#fff');
+  }
+  // behind-the-kicker view for field goals
   drawKick() {
     const m = this.m, k = m.kick, W = G.W, H = G.H;
     const top = this.top + HUD_H, HZ = top + Math.round((H - top) * 0.3), F = (H - HZ) * 3.6, CZ = 4.2;

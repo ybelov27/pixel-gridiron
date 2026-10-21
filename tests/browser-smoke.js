@@ -48,7 +48,7 @@ export function playOneGame({ maxSec = 2000, log = false } = {}) {
         const r = recs.sort((a, b) => sep(b) - sep(a))[0];
         const T = 0.35 + Math.hypot(r.x - p.QB.x, r.y - p.QB.y) / 22;
         const tx = r.x + r.vx * T * 0.9, ty = r.y + r.vy * T * 0.9;
-        const dx = (tx - p.QB.x) * 8 / 2.6, dy = (ty - p.QB.y) * sc.SY / 2.0;
+        const dx = (tx - p.QB.x) * 8 / 3.4, dy = (ty - p.QB.y) * sc.SY / 2.6;
         const kind = stats.throws % 3; // 0 mouse lob, 1 touch (+2nd finger bullet), 2 right-button bullet
         const x0 = Math.min(cv.width - 20, midX + 60), y0 = midY;
         if (kind === 0) drag(x0, y0, x0 - dx, y0 - dy);
