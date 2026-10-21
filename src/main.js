@@ -90,6 +90,7 @@ function step() {
   if (G.PORTRAIT) { if (app.scene && app.scene.onPortrait) app.scene.onPortrait(); return; }
   if (app.scene && app.scene.update && !app.modal) app.scene.update(STEP);
   if (app.toastT > 0) app.toastT -= STEP;
+  if (app.fadeT > 0) app.fadeT -= STEP;
 }
 function render() {
   const W = G.W, H = G.H;
@@ -107,6 +108,7 @@ function render() {
     sc.draw();
     G.ctx.restore(); UI.ox = 0; UI.oy = 0;
   }
+  if (app.fadeT > 0) rect(0, 0, W, H, `rgba(11,13,28,${Math.min(1, app.fadeT / 0.2)})`);
   if (app.modal) { UI.begin(); drawModal(); }
   if (app.toastT > 0) {
     const tw = Math.min(W - 20, app.toastText.length * 4 + 16);

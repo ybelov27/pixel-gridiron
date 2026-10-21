@@ -8,7 +8,8 @@ export const SAVE_VERSION = 1;
 export const DIFFS = ['EASY', 'MEDIUM', 'HARD', 'EXTREME'];
 // per-difficulty knobs, interpolated by continuous level (difficulty + dynamic offset)
 const DK = {
-  sim: [-0.07, 0, 0.05, 0.1],      // opponent drive strength
+  sim: [-0.09, -0.02, 0.04, 0.09], // opponent drive strength
+  assist: [0.75, 0.5, 0.25, 0],     // throw aim assist
   react: [0.14, 0, -0.05, -0.09],  // defender reaction delay delta (s)
   spd: [-0.7, 0, 0.35, 0.7],       // defender speed delta (yd/s)
   contest: [-0.12, 0, 0.07, 0.14], // contested-catch / tackle edge for defense
@@ -127,7 +128,7 @@ export function syncUserTeamRatings(c) {
 export function driveOutcome(rng, off, def, startYard, mod = 0) {
   const d = (off - def) * 0.07 + mod;
   const f = clamp((startYard - 25) / 75, -0.3, 1);
-  let pTD = clamp(0.18 + d + f * 0.35, 0.03, 0.85);
+  let pTD = clamp(0.16 + d + f * 0.35, 0.03, 0.85);
   let pFG = clamp(0.14 + f * 0.12 + d * 0.3, 0.04, 0.3);
   let pTO = clamp(0.11 - d * 0.4, 0.03, 0.25);
   let pDN = 0.05;

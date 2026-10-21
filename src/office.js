@@ -311,7 +311,7 @@ export function jobReview(c) {
   if (t.w < t.l) d -= 8;
   d += Math.round((pct(t) - 0.5) * 20);
   c.job = clamp(c.job + d, 0, 100);
-  const limit = c.settings.difficulty === 'EASY' ? 8 : 15;
+  const limit = c.settings.difficulty === 'EASY' ? 6 : 12;
   c.seasonEnd.jobDelta = d;
   if (c.job < limit) {
     c.stage = 'fired';

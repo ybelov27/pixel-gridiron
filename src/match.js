@@ -14,7 +14,7 @@ export class KickGame {
     this.acc = eff(kicker, 'ACC'); this.leg = eff(kicker, 'LEG'); this.cmp = eff(kicker, 'CMP');
     this.maxRange = 38 + this.leg * 3;
     this.stage = 'aim'; this.t = 0; this.ang = 0; this.power = 0; this.pdir = 1; this.u = 0; this.done = false; this.good = false;
-    this.omega = 2.0 + (10 - this.acc) * 0.3 + (10 - this.cmp) * 0.08;
+    this.omega = 1.6 + (10 - this.acc) * 0.25 + (10 - this.cmp) * 0.06;
     this.A = 9;
   }
   update(dt) {

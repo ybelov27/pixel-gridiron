@@ -1,5 +1,5 @@
 // Network-first service worker: always fresh when online, still playable offline.
-const CACHE = 'pixel-gridiron-81ddca25';
+const CACHE = 'pixel-gridiron-633fce55';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
   'src/main.js', 'src/gfx.js', 'src/input.js', 'src/ui.js', 'src/app.js', 'src/audio.js', 'src/rng.js', 'src/data.js', 'src/players.js',
   'src/play.js', 'src/playbook.js', 'src/match.js', 'src/league.js', 'src/office.js', 'src/flow.js', 'src/save.js',

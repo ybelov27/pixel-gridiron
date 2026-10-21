@@ -41,7 +41,7 @@ ES modules don't load from `file://`, so you need a server. Your career autosave
 | Pause / sim rest of game | `II` button | Esc / P |
 | Skip message or opponent drive | Tap | Space |
 
-The play is chosen for you, and each receiver's route is drawn as a dotted line before the snap. A lob arcs high, so defenders have time to converge. A bullet is flat and fast but slightly less accurate. A star icon marks your star players.
+The play is chosen for you. Before the snap, each receiver's route is drawn as a dotted line with direction chevrons and an arrowhead (a yellow stop bar marks routes that settle, such as curls and hitches). Throws get aim assist that pulls the ball toward the receiver you're leading: strong on Easy, off on Extreme. A lob arcs high, so defenders have time to converge. A bullet is flat and fast but slightly less accurate. A star icon marks your star players.
 
 ## What's in it
 
@@ -67,7 +67,10 @@ This writes an import map into `index.html` that points every module at `file.js
 
 ```bash
 node tests/run.mjs
+node tests/render.mjs
 ```
+
+`tests/render.mjs` stubs out the canvas and runs every drawing path (all menus, full games with kicks and returns, weather, night) to catch runtime errors in rendering code.
 
 The Node tests use no dependencies. They cover:
 

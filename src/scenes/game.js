@@ -19,6 +19,7 @@ export class GameScene {
     this.m = match; this.onDone = onDone; this.camX = 10 + match.ballYard + 18;
     this.g = null; this.paused = false; this.noAutosave = true; this.full = true; this.t = 0; this.flash = 0;
     this.shake = 0; this.hype = 0; this.parts = []; this.floats = []; this.lastMsg = ''; this.msgT = 0;
+    this.ballTrail = []; this.dustT = 0; this.prevScore = { u: 0, o: 0 }; this.bump = { u: 0, o: 0 };
     this.wx = []; for (let i = 0; i < 110; i++) this.wx.push({ x: Math.random(), y: Math.random(), s: 0.5 + Math.random() });
     this.layout();
   }
@@ -72,6 +73,14 @@ export class GameScene {
         if (g >= 15) this.hype = 1.2;
       }
     }
+    // dust kicked up by a fast ball carrier
+    this.dustT -= dt;
+    const car = p && p.carrier && !p.result ? p.carrier : null;
+    if (car && Math.hypot(car.vx, car.vy) > 6.5 && this.dustT <= 0) {
+      this.dustT = 0.09;
+      this.parts.push({ wx: car.x - 0.6, wy: car.y, x: 0, y: 3, vx: -8 - Math.random() * 8, vy: -4 - Math.random() * 6, g: 30, c: m.weather === 'snow' ? '#ffffff' : '#a8d08d', life: 0.3 });
+    }
+    for (const k of ['u', 'o']) { if (m.score[k] !== this.prevScore[k]) { this.bump[k] = 0.8; this.prevScore[k] = m.score[k]; } if (this.bump[k] > 0) this.bump[k] -= dt; }
     if (m.msg !== this.lastMsg || m.phase !== 'msg') { if (m.phase === 'msg' && m.msg !== this.lastMsg) this.msgT = 0; this.lastMsg = m.phase === 'msg' ? m.msg : ''; }
     this.msgT += dt;
   }
@@ -223,6 +232,16 @@ export class GameScene {
       if (yd < 10) c = shadeColor(m.me.c1, 0.85); else if (yd >= 110) c = shadeColor(m.opp.c1, 0.85);
       rect(this.sx(yd), FT, 5 * SX, FW * SY, c);
     }
+    // grass texture (anchored to world yards so it scrolls with the field)
+    const tuft = snow ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.09)', tuft2 = snow ? 'rgba(160,190,170,0.5)' : 'rgba(255,255,255,0.06)';
+    for (let yd = Math.max(10, x0); yd < Math.min(110, x1); yd++) {
+      const bx = this.sx(yd);
+      for (let k = 0; k < 7; k++) {
+        const h = ((yd * 73856093) ^ (k * 19349663)) >>> 0;
+        const ty = FT + 2 + (h % Math.max(1, Math.floor(FW * SY - 4))), tx = bx + ((h >> 8) % SX);
+        rect(tx, ty, 1, 2, k % 2 ? tuft : tuft2);
+      }
+    }
     // end zone checker + rotated team names
     for (const [ex, t, rot] of [[0, m.me, -1], [110, m.opp, 1]]) {
       const s0 = this.sx(ex), s1 = this.sx(ex + 10);
@@ -280,21 +299,30 @@ export class GameScene {
   home() { return this.m.userHome ? this.m.me : this.m.opp; }
   drawPlay(p) {
     const m = this.m;
-    // routes before the snap
+    // routes before the snap: dotted path, chevrons showing direction, arrowhead (or stop bar) at the end
     if (!p.started && p.receivers) {
       for (const r of p.receivers) {
         if (!r.route || r.block) continue;
-        let px0 = r.x, py0 = r.y, phase = 0;
-        const pts = r.route.slice(0, r.run ? 2 : undefined);
         const col = r.run ? '#ffa300' : '#fff1e8';
-        for (const q of pts) { line(this.sx(px0), this.sy(py0), this.sx(q.x), this.sy(q.y), col, 2, phase); phase++; px0 = q.x; py0 = q.y; }
-        const last = pts[pts.length - 1], prev = pts.length > 1 ? pts[pts.length - 2] : { x: r.x, y: r.y };
-        if (!r.stopAtEnd) {
+        const pts = [{ x: r.x, y: r.y }, ...r.route.slice(0, r.run ? 2 : undefined)];
+        const last = pts[pts.length - 1], prev = pts[pts.length - 2];
+        if (!r.stopAtEnd) { // extend in the final direction so the arrow shows where they keep running
           const L = Math.hypot(last.x - prev.x, last.y - prev.y) || 1;
-          const ex = last.x + (last.x - prev.x) / L * 4, ey = last.y + (last.y - prev.y) / L * 4;
-          line(this.sx(last.x), this.sy(last.y), this.sx(ex), this.sy(ey), col, 2);
-          rect(this.sx(ex) - 1, this.sy(ey) - 1, 3, 3, col);
-        } else { rect(this.sx(last.x) - 2, this.sy(last.y) - 1, 5, 3, '#0b0d1c'); rect(this.sx(last.x) - 1, this.sy(last.y), 3, 1, '#ffec27'); }
+          pts.push({ x: last.x + (last.x - prev.x) / L * 4, y: last.y + (last.y - prev.y) / L * 4 });
+        }
+        const sp = pts.map((q) => [this.sx(q.x), this.sy(q.y) - 2]);
+        let along = 0;
+        for (let i = 1; i < sp.length; i++) {
+          const [x0, y0] = sp[i - 1], [x1, y1] = sp[i];
+          line(x0, y0, x1, y1, col, 2, i);
+          const len = Math.hypot(x1 - x0, y1 - y0) || 1, ux = (x1 - x0) / len, uy = (y1 - y0) / len;
+          for (let d = 14 - (along % 14); d < len - 6; d += 14) chevron(x0 + ux * d, y0 + uy * d, ux, uy, col);
+          along += len;
+        }
+        const [ex, ey] = sp[sp.length - 1], [px0, py0] = sp[sp.length - 2];
+        const L = Math.hypot(ex - px0, ey - py0) || 1, ux = (ex - px0) / L, uy = (ey - py0) / L;
+        arrowHead(ex, ey, ux, uy, r.stopAtEnd ? '#ffec27' : col);
+        if (r.stopAtEnd) { for (let j = -3; j <= 3; j++) { rect(ex + ux * 2 - uy * j, ey + uy * 2 + ux * j, 1, 1, '#0b0d1c'); rect(ex + ux * 3 - uy * j, ey + uy * 3 + ux * j, 1, 1, '#ffec27'); } }
       }
     }
     // aim preview
@@ -325,26 +353,51 @@ export class GameScene {
     }
     // entities, depth-sorted
     const ents = p.ents.slice().sort((a, b) => a.y - b.y);
+    const bl = p.ball, inAir = bl.state === 'air', left = inAir ? bl.T - bl.t : 9;
+    const td = p.result && p.result.kind === 'td';
     for (const e of ents) {
       const off = e.side === 'off';
       const T = off ? m.me : m.opp;
-      const x = this.sx(e.x), y = this.sy(e.y);
-      if (x < -12 || x > G.W + 12) continue;
-      rect(x - 4, y - 1, 9, 3, 'rgba(0,0,0,0.28)'); rect(x - 3, y - 2, 7, 1, 'rgba(0,0,0,0.18)');
+      const x = this.sx(e.x);
+      let y = this.sy(e.y);
+      if (x < -16 || x > G.W + 16) continue;
+      const pants = off ? '#e9e9e9' : shadeColor(T.c2 === '#111111' ? '#555555' : T.c2, 0.75);
+      const face = off ? 1 : -1;
       const down = (e.down && p.result) || (e.stun > 0.3 && !e.held);
       const sp = Math.hypot(e.vx, e.vy);
+      // pick a pose
       let fr = down ? 5 : sp > 0.6 ? [1, 2, 3, 2][Math.floor(e.anim * 1.4) % 4] : 0;
-      if (!down && e === p.QB && p.mode !== 'return' && !p.thrown && !p.carrier && this.g && this.g.kind === 'aim') fr = 4;
-      const img = playerSprite(T.c1, T.c2, fr, off ? 1 : -1, e.p.skin || 0, off ? '#e9e9e9' : shadeColor(T.c2 === '#111111' ? '#555555' : T.c2, 0.75));
-      if (down) drawSprite(img, x - 8, y - 8); else drawSprite(img, x - 5, y - 15);
-      if (off && e.star && !down) starIcon(x - 2, y - 22, '#ffd23f');
+      let lift = 0;
+      if (!down) {
+        if (e === p.QB && p.mode !== 'return' && !p.carrier && ((!p.thrown && this.g && this.g.kind === 'aim') || (p.thrown && p.t - p.throwT < 0.22))) fr = 4;
+        if (e.toBall && inAir && left < 0.45) fr = 6;                       // reaching for the ball
+        if (e.diveT > 0) { fr = 7; lift = 4; }                               // diving forward
+        if (e.lunge && p.result) { fr = 7; lift = 2; }                       // tackler lunging
+        if (td && off && (e === p.carrier || Math.abs(e.x - (p.carrier || e).x) < 12)) { fr = 6; lift = Math.round(Math.abs(Math.sin(this.t * 9 + e.y)) * 5); }
+        if (!p.started && off && fr === 0) lift = Math.floor(this.t * 2 + e.y) % 2; // pre-snap bounce
+      }
+      // shadow shrinks as the player leaves the ground
+      rect(x - 4 + Math.min(2, lift >> 1), y - 1, 9 - Math.min(4, lift), 3, 'rgba(0,0,0,0.28)');
+      rect(x - 3, y - 2, 7, 1, 'rgba(0,0,0,0.18)');
+      // juke after-images
+      if (e === p.carrier && e.jukeT > 0 && e.trail.length > 12) {
+        const n = e.trail.length, ctx = G.ctx;
+        ctx.globalAlpha = 0.28;
+        for (const back of [10, 20]) { const tx = this.sx(e.trail[n - back - 2]), ty = this.sy(e.trail[n - back - 1]); drawSprite(playerSprite(T.c1, T.c2, fr, face, e.p.skin || 0, pants), tx - 5, ty - 15); }
+        ctx.globalAlpha = 1;
+      }
+      const img = playerSprite(T.c1, T.c2, fr, face, e.p.skin || 0, pants);
+      y -= lift;
+      if (fr === 5 || fr === 7) drawSprite(img, x - 8, y - 8); else drawSprite(img, x - 5, y - img.height + 1);
+      const headY = fr === 6 ? y - 17 : y - 15;
+      if (off && e.star && fr !== 5 && fr !== 7) starIcon(x - 2, headY - 7, '#ffd23f');
       // rating badge over skill players and defenders
-      if (!down && !['OL', 'DL', 'BLK'].includes(e.role) && (m.phase === 'presnap' || m.phase === 'live')) {
-        const v = e.ov ?? (e.ov = ovr(e.p)), by = y - (off && e.star ? 30 : 24);
+      if (!down && fr !== 7 && !['OL', 'DL', 'BLK'].includes(e.role) && (m.phase === 'presnap' || m.phase === 'live') && !p.result) {
+        const v = e.ov ?? (e.ov = ovr(e.p)), by = headY - (off && e.star ? 15 : 9);
         rect(x - 6, by, 13, 7, '#0b0d1c'); rect(x - 5, by + 1, 11, 5, off ? shadeColor(T.c1, 0.55) : '#3a1018');
         text(String(v), x + 1, by + 1, ovrColor(v), 1, 'center');
       }
-      if (e === p.carrier && !down) { rect(x - 1, y - (e.star ? 27 : 21), 3, 1, '#fff'); px(x, y - (e.star ? 26 : 20), '#fff'); }
+      if (e === p.carrier && !down && fr !== 7) { const ay = headY - (e.star ? 12 : 6) + Math.round(Math.sin(this.t * 8)); rect(x - 1, ay, 3, 1, '#fff'); px(x, ay + 1, '#fff'); }
     }
     // handoff ring
     if (p.canHandoff && p.canHandoff()) {
@@ -356,13 +409,25 @@ export class GameScene {
     const b = p.ball;
     const spin = Math.floor(this.t * 14) % 3;
     if (b.state === 'air' || b.state === 'loose' || b.state === 'kick') {
+      const bx = this.sx(b.x), by = this.sy(b.y, b.z) - 2;
+      // fading trail
+      this.ballTrail.push([b.x, b.y, b.z]); if (this.ballTrail.length > 8) this.ballTrail.shift();
+      this.ballTrail.forEach(([tx, ty, tz], i) => { if (i % 2) return; rect(this.sx(tx) - 1, this.sy(ty, tz) - 2, 2, 1, `rgba(255,255,255,${0.08 + i * 0.05})`); });
       const sh = Math.max(1, 4 - Math.round(b.z / 4));
       rect(this.sx(b.x) - sh, this.sy(b.y), sh * 2, 1, 'rgba(0,0,0,0.45)');
-      ballSprite(this.sx(b.x), this.sy(b.y, b.z) - 2, spin);
-      if (b.state === 'air') { const tx = this.sx(b.x1), ty = this.sy(b.y1); for (let a = 0; a < 12; a++) px(tx + Math.cos(a / 12 * 6.283) * 4, ty + Math.sin(a / 12 * 6.283) * 2.4, 'rgba(255,236,39,0.8)'); }
-    } else if (b.state === 'carried' && p.carrier && !(p.carrier.down && p.result)) ballSprite(this.sx(p.carrier.x) + 3, this.sy(p.carrier.y) - 8, 0);
-    else if (b.state === 'held' && p.QB) ballSprite(this.sx(p.QB.x) + 3, this.sy(p.QB.y) - (this.g ? 12 : 8), 0);
-    else if (b.state === 'carried' && !p.carrier && p.KR) ballSprite(this.sx(p.KR.x) + 3, this.sy(p.KR.y) - 8, 0);
+      ballSprite(bx, by, spin);
+      if (b.state === 'air') { const tx = this.sx(b.x1), ty = this.sy(b.y1), rr = 3 + (1 - Math.min(1, left)) * 2; for (let a = 0; a < 14; a++) px(tx + Math.cos(a / 14 * 6.283 + this.t * 3) * rr * 1.3, ty + Math.sin(a / 14 * 6.283 + this.t * 3) * rr * 0.75, 'rgba(255,236,39,0.85)'); }
+    } else {
+      this.ballTrail.length = 0;
+      if (b.state === 'carried' && p.carrier && !(p.carrier.down && p.result)) ballSprite(this.sx(p.carrier.x) + 3, this.sy(p.carrier.y) - 8, 0);
+      else if (b.state === 'held' && p.QB && p.mode !== 'return') {
+        // snap: the ball travels from the center to the QB
+        const u = p.started ? Math.min(1, p.t / 0.22) : 0, ctr = p.OL ? p.OL[2] : p.QB;
+        const qx = this.sx(p.QB.x) + 3, qy = this.sy(p.QB.y) - (this.g ? 12 : 8);
+        const cx2 = this.sx(ctr.x) + 2, cy2 = this.sy(ctr.y) - 3;
+        ballSprite(cx2 + (qx - cx2) * u, cy2 + (qy - cy2) * u - Math.sin(u * Math.PI) * 4, u < 1 ? spin : 0);
+      } else if (b.state === 'carried' && !p.carrier && p.KR) ballSprite(this.sx(p.KR.x) + 3, this.sy(p.KR.y) - 8, 0);
+    }
   }
   drawWeather() {
     const w = this.m.weather; if (w === 'clear') return;
@@ -411,17 +476,19 @@ export class GameScene {
     const m = this.m, W = G.W, top = this.top, L = 3 + G.SAFE.l, R = W - 3 - G.SAFE.r;
     rect(0, 0, W, top + HUD_H, '#0b0d1c');
     rect(0, top + HUD_H - 1, W, 1, '#2a3166');
-    const box = (x, t, sc, tos, poss) => {
+    const box = (x, t, sc, tos, poss, bump = 0) => {
+      const sc_c = bump > 0 && Math.floor(bump * 8) % 2 ? '#ffd23f' : '#fff', pop = bump > 0.55 ? 1 : 0;
       rect(x, top + 2, 62, 20, '#000'); rect(x + 1, top + 3, 22, 18, t.c1);
       big(t.abbr, x + 12, top + 9, t.c2 === '#111111' ? '#fff' : '#fff', { align: 'center', scale: 1 });
       rect(x + 23, top + 3, 38, 18, '#1b2045');
-      if (sc < 10) big(String(sc), x + 57, top + 5, '#fff', { align: 'right', scale: 2 });
-      else big(String(sc), x + 58, top + 9, '#fff', { align: 'right' });
+      if (bump > 0) rect(x + 23, top + 3, 38, 18, `rgba(255,210,63,${Math.min(0.35, bump * 0.45)})`);
+      if (sc < 10) big(String(sc), x + 57, top + 5 - pop, sc_c, { align: 'right', scale: 2 });
+      else big(String(sc), x + 58, top + 9 - pop, sc_c, { align: 'right' });
       for (let i = 0; i < 3; i++) rect(x + 3 + i * 6, top + 18, 4, 2, i < tos ? '#ffd23f' : '#3a3f5e');
       if (poss) { rect(x + 25, top + 10, 3, 3, '#8b4a1c'); }
     };
     const uPoss = m.phase !== 'opp';
-    box(L, m.me, m.score.u, m.to.u, uPoss); box(L + 64, m.opp, m.score.o, m.to.o, !uPoss);
+    box(L, m.me, m.score.u, m.to.u, uPoss, this.bump.u); box(L + 64, m.opp, m.score.o, m.to.o, !uPoss, this.bump.o);
     const q = m.q <= 4 ? `Q${m.q}` : m.q === 5 ? 'OT' : `OT${m.q - 4}`;
     const cl = Math.ceil(m.clock), mm = Math.floor(cl / 60), ss = String(cl % 60).padStart(2, '0');
     const cx = L + 132;
@@ -582,6 +649,24 @@ export class GameScene {
       const bs = Math.max(1, Math.round(sc(z) / 3));
       rect(bxp - bs, byp - bs, bs * 2 + 1, bs * 2, '#8b4a1c');
       if (k.u > 1) this.banner(k.good ? "IT'S GOOD!" : k.why);
+    }
+  }
+}
+// small direction chevron (">" pointing along ux,uy)
+function chevron(x, y, ux, uy, col) {
+  const nx = -uy, ny = ux;
+  for (let i = 0; i <= 2; i++) {
+    px(x - ux * i + nx * i, y - uy * i + ny * i, col);
+    px(x - ux * i - nx * i, y - uy * i - ny * i, col);
+  }
+}
+// filled arrowhead with a dark outline, tip at (x, y) pointing along (ux, uy)
+function arrowHead(x, y, ux, uy, col) {
+  const nx = -uy, ny = ux, Lh = 6, Hw = 3.5;
+  for (const [c, grow] of [['#0b0d1c', 1], [col, 0]]) {
+    for (let i = -grow; i <= Lh + grow; i++) {
+      const w = (i / Lh) * Hw + grow;
+      for (let j = -w; j <= w; j += 0.5) rect(Math.round(x - ux * i + nx * j), Math.round(y - uy * i + ny * j), 1, 1, c);
     }
   }
 }

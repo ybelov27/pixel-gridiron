@@ -313,10 +313,10 @@ export class PlayerScene {
     panel(4, 20, 120, 100);
     rect(10, 26, 30, 36, t.c1); drawSprite(playerSprite(t.c1, t.c2, 0, 1, p.skin || 0), 22, 38);
     text(`AGE ${p.age}`, 46, 27, '#fff');
+    const sc = this.mode === 'draft' ? p.scout : null;
     const ov = sc ? Math.round(40 + (sc.stars * 2 - 1) * 59 / 9) : ovr(p);
     rect(92, 24, 28, 22, '#0b0d1c'); rect(93, 25, 26, 20, '#1b2045');
     big(String(ov), 106, 27, ovrColor(ov), { align: 'center' }); text(sc ? 'EST' : 'OVR', 106, 37, C.dim, 1, 'center');
-    const sc = this.mode === 'draft' ? p.scout : null;
     text('RATING', 46, 37, C.dim); stars(46, 45, sc ? sc.stars : p.stars);
     text('POTENTIAL', 46, 54, C.dim);
     if (sc) text(`${sc.potLo}-${sc.potHi} (SCOUTED)`, 46, 62, '#fff'); else stars(46, 62, p.pot, 5, '#c2c3c7');

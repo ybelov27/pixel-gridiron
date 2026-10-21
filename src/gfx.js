@@ -234,15 +234,22 @@ export function icon(name, x, y, color = '#fff') {
 
 // ---------- player sprites: fill art auto-outlined -> 10x16 ----------
 // h helmet, s helmet stripe, l logo, m facemask, f face, j jersey, n number band, a arm, p pants, k socks, b shoes
-const BODY = [
-  '..ssss..', '.hhhhhh.', 'hhhhlhhm', 'hhhhhfmm', '.hhhffm.', '..jjff..', '.jjjjjj.', 'jjjnnjjj', 'ajjnnjja', 'ajjjjjja',
-];
+const HEAD = ['..ssss..', '.hhhhhh.', 'hhhhlhhm', 'hhhhhfmm', '.hhhffm.', '..jjff..'];
+const TORSO = {
+  n: ['.jjjjjj.', 'jjjnnjjj', 'ajjnnjja', 'ajjjjjja'],   // arms at sides
+  a: ['.jjjjjja', 'jjjnnjja', 'ajjnnjj.', '.jjjjjj.'],   // front arm forward, back arm back
+  c: ['ajjjjjj.', 'ajjnnjjj', '.jjnnjja', '.jjjjjja'],   // opposite swing
+  t: ['.jjjjjj.', 'jjjnnjja', '.jjnnjj.', '.jjjjjj.'],   // throwing (rear arm raised, see THROW_HEAD)
+  u: ['.jjjjjj.', '.jjnnjj.', '.jjnnjj.', '.jjjjjj.'],   // arms up (catch / celebrate)
+};
+const THROW_HEAD = ['..ssss..', '.hhhhhh.', 'ahhhlhhm', 'ahhhhfmm', 'ahhhffm.', '.ajjff..'];
 const LEGS = [
   ['.pppppp.', '.pp..pp.', '.kk..kk.', '.bb..bbb'], // stand
   ['.pppppp.', 'pp....pp', 'kk.....k', 'bb.....b'], // stride
-  ['.pppppp.', '..pppp..', '..kkkk..', '..bbbbb.'], // passing
+  ['.pppppp.', '..pppp..', '..kkkk..', '..bbbbb.'], // passing / feet together
   ['.pppppp.', 'pp....pp', 'k.....kk', 'b.....bb'], // stride 2
 ];
+const UP_HEAD = ['a......a', 'a.ssss.a', 'ahhhhhha', 'hhhhlhhm', 'hhhhhfmm', '.hhhffm.', '..jjff..'];
 const DOWN = ['..............', '.ss...........', 'hhhh.aa.......', 'hhhhjjjjjpppkb', 'mhffjjnnjpppkb', '.mf.aa........'];
 const OUTLINE = '#10101a';
 const SKINS = ['#f2c39b', '#c98c5a', '#8d5a35', '#5c3a21'];
@@ -258,16 +265,20 @@ function buildSprite(rows, map, facing) {
   }
   return c;
 }
-// frames: 0 stand, 1 run A, 2 run B (=stand legs), 3 run C, 4 passing, 5 down
+// frames: 0 stand, 1 run A, 2 run B, 3 run C, 4 throwing, 5 down (lying), 6 arms up (catch/celebrate), 7 dive (lunging forward)
 export function playerSprite(primary, secondary, frameI, facing, skin = 0, pants = '#e8e8e8') {
   const key = primary + secondary + frameI + facing + skin + pants;
   let c = spriteCache.get(key);
   if (c) return c;
   const map = { h: primary, s: secondary, l: secondary, m: '#d8d8d8', f: SKINS[skin % 4], j: primary, n: secondary, a: SKINS[skin % 4], p: pants, k: secondary, b: '#1c1c24' };
   if (frameI === 5) c = buildSprite(DOWN, map, facing);
+  else if (frameI === 7) c = buildSprite(DOWN, map, -facing); // horizontal, helmet leading
   else {
-    const legs = LEGS[[0, 1, 0, 3, 2][frameI] ?? 0];
-    c = buildSprite([...BODY, ...legs], map, facing);
+    const rows = {
+      0: [...HEAD, ...TORSO.n, ...LEGS[0]], 1: [...HEAD, ...TORSO.a, ...LEGS[1]], 2: [...HEAD, ...TORSO.n, ...LEGS[2]],
+      3: [...HEAD, ...TORSO.c, ...LEGS[3]], 4: [...THROW_HEAD, ...TORSO.t, ...LEGS[2]], 6: [...UP_HEAD, ...TORSO.u, ...LEGS[0]],
+    }[frameI] || [...HEAD, ...TORSO.n, ...LEGS[0]];
+    c = buildSprite(rows, map, facing);
   }
   spriteCache.set(key, c);
   return c;
