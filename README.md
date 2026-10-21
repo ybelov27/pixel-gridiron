@@ -53,6 +53,16 @@ The play is chosen for you, and each receiver's route is drawn as a dotted line 
 
 See [RESEARCH.md](RESEARCH.md) for the design rules and every ASSUMED number.
 
+## Publishing updates
+
+GitHub Pages caches files for 10 minutes. Before pushing, stamp the build so browsers fetch the new code immediately:
+
+```bash
+node tools/stamp.mjs
+```
+
+This writes an import map into `index.html` that points every module at `file.js?v=<content hash>`, and it bumps the service worker cache. Pushing to `main` redeploys the site within a couple of minutes.
+
 ## Tests
 
 ```bash
