@@ -53,7 +53,7 @@ The play is chosen for you. Before the snap, each receiver's route is drawn as a
 - **Touchdown celebrations:** every player has his own: SPIKE, DANCE, BACKFLIP, LEAP, FLEX, MOONWALK, HELICOPTER or FIREWORKS. It plays when he scores, and you can change a star's celebration on his player card.
 - **No popping in:** between plays, players walk from where they finished to their new spots. The game uses crisp, integer-scaled pixels throughout.
 - **Stadium:** team logo badges in both end zones and at midfield, plus cheerleaders on the far sideline who jump on big plays.
-- **Speed:** speed comes from each player's rating. Linemen and slow players are clearly slow (~5–5.5 yd/s), average players moderate, and only real burners hit ~9 yd/s.
+- **Speed:** speed comes from each player's rating. Linemen and slow players are clearly slow (~5.8 yd/s), average players ~7.4, and only real burners hit ~10 yd/s.
 - **Team pursuit:** the closest defenders attack the ball carrier while the rest keep their pursuit lanes and safeties stay in front, so the defense no longer swarms in one blob.
 - **Achievements:** 33 trophies (big plays, games, seasons and career milestones), each paying coaching credits. Big-play ones unlock live mid-game with a gold banner. See them under HISTORY → TROPHIES.
 - **Physics:** players have momentum (they accelerate and need time to cut; linemen are heavy, skill players quick), bodies collide instead of passing through each other, and defenders get slowed in traffic. Runners tackled at speed fall forward for extra yards, and stretching across the goal line scores. Loose balls bounce oddly and roll to a stop. The camera leads the ball carrier and looks ahead to where passes will land.

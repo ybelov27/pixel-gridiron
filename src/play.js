@@ -4,7 +4,7 @@ import { ROUTES } from './playbook.js';
 import { eff } from './players.js';
 
 export const FW = 53.33;
-export const spdOf = (v) => 4.3 + v * 0.5;   // SPD 2 ~5.3 yd/s (lineman), 5 ~6.8, 8 ~8.3, 10 ~9.3
+export const spdOf = (v) => 4.8 + v * 0.52;  // SPD 2 ~5.8 yd/s (lineman), 5 ~7.4, 8 ~9.0, 10 ~10.0
 // arm strength sets how far a QB can throw (weak ~28 yd, average ~38, elite ~58) and how fast the ball gets there
 export const maxThrow = (arm) => 18 + arm * 4;
 const RAD = Math.PI / 180;
