@@ -780,31 +780,42 @@ export class GameScene {
     }
     const bx0 = this.sx(spotX), by0 = this.sy(cy) - 3;
     if (k.stage !== 'flight') {
-      // aim marker sweeps across the uprights: where the ball would cross the goal line
-      const ang = (k.stage === 'aim' ? k.ang : k.lockAng) * Math.PI / 180;
-      const latAt = k.latFor(k.stage === 'aim' ? k.ang : k.lockAng); // wind included
+      // once power is set, the aim line shows where the ball would cross the goal line (wind included)
+      const latAt = k.latFor(k.ang);
       const W = G.W;
-      let gx = this.sx(120);
-      const gy = this.sy(cy + latAt), offscreen = gx > W - 14;
-      if (offscreen) gx = W - 14;
-      line(bx0, by0, gx, gy - 20, 'rgba(255,236,39,0.9)', 2);
-      if (offscreen) { // the posts are further downfield: show the aim against them at the edge
-        const lo2 = this.sy(cy - 3.08), hi2 = this.sy(cy + 3.08);
-        rect(gx - 1, lo2 - 22, 3, hi2 - lo2 + 4, '#0b0d1c'); rect(gx, lo2 - 21, 1, hi2 - lo2 + 2, '#ffd23f');
-        text('POSTS', gx - 2, lo2 - 30, '#ffd23f', 1, 'right'); text('>', gx + 5, gy - 22, '#fff');
-      }
-      const lo = this.sy(cy - 3.08), hi = this.sy(cy + 3.08);
-      rect(gx - 5, lo - 20, 2, hi - lo, 'rgba(255,255,255,0.25)');
-      rect(gx - 7, gy - 21, 5, 3, '#0b0d1c'); rect(gx - 6, gy - 20, 3, 1, Math.abs(latAt) <= 3.08 ? '#3ccf6a' : '#ff4d5e');
       ballSprite(bx0, by0, 2);
-      // power bar
+      if (k.stage === 'aim') {
+        let gx = this.sx(120);
+        const gy = this.sy(cy + latAt), offscreen = gx > W - 14;
+        if (offscreen) gx = W - 14;
+        line(bx0, by0, gx, gy - 20, 'rgba(255,236,39,0.9)', 2);
+        if (offscreen) { // the posts are further downfield: show the aim against them at the edge
+          const lo2 = this.sy(cy - 3.08), hi2 = this.sy(cy + 3.08);
+          rect(gx - 1, lo2 - 22, 3, hi2 - lo2 + 4, '#0b0d1c'); rect(gx, lo2 - 21, 1, hi2 - lo2 + 2, '#ffd23f');
+          text('POSTS', gx - 2, lo2 - 30, '#ffd23f', 1, 'right'); text('>', gx + 5, gy - 22, '#fff');
+        }
+        const lo = this.sy(cy - 3.08), hi = this.sy(cy + 3.08);
+        rect(gx - 5, lo - 20, 2, hi - lo, 'rgba(255,255,255,0.25)');
+        rect(gx - 7, gy - 21, 5, 3, '#0b0d1c'); rect(gx - 6, gy - 20, 3, 1, Math.abs(latAt) <= 3.08 ? '#3ccf6a' : '#ff4d5e');
+      }
       const bw = 120, bx = Math.floor((W - bw) / 2), by = this.fieldB - 16;
       panel(bx - 4, by - 14, bw + 8, 26);
-      text(k.stage === 'aim' ? 'TAP TO LOCK AIM' : 'TAP TO KICK', W / 2, by - 10, '#fff', 1, 'center');
+      text(k.stage === 'power' ? 'TAP WHEN THE METER IS FULL' : 'TAP WHEN THE ARROWS MEET', W / 2, by - 10, '#fff', 1, 'center');
       rect(bx, by - 2, bw, 8, '#0b0d1c'); rect(bx + 1, by - 1, bw - 2, 6, '#1b2045');
-      const need = Math.min(1, k.dist / k.maxRange);
-      rect(bx + need * bw, by - 4, 1, 12, '#ff4d5e');
-      if (k.stage === 'power') rect(bx + 1, by - 1, (bw - 2) * k.power, 6, k.power > 0.92 ? '#ff9f1c' : '#3ccf6a');
+      if (k.stage === 'power') {
+        // power meter: green zone at the top, red tick = the leg needed to reach the posts
+        rect(bx + 1 + Math.round((bw - 2) * 0.92), by - 1, Math.round((bw - 2) * 0.08), 6, '#24402c');
+        const pw = k.power;
+        rect(bx + 1, by - 1, Math.round((bw - 2) * pw), 6, pw >= 0.92 ? '#3ccf6a' : pw * k.maxRange >= k.dist ? '#ffd23f' : '#ff9f1c');
+        rect(bx + Math.round(Math.min(1, k.dist / k.maxRange) * bw), by - 4, 1, 12, '#ff4d5e');
+      } else {
+        // direction: two arrows slide in from the ends; tap when they meet in the middle
+        const mid = bx + bw / 2, gap = Math.round(k.ang / k.A * (bw / 2 - 6));
+        const ok = Math.abs(latAt) <= 3.08;
+        rect(mid, by - 4, 1, 12, ok ? '#3ccf6a' : '#ffffff');
+        arrowHead(Math.round(mid - gap) - 1, by + 2, 1, 0, '#ffd23f');
+        arrowHead(Math.round(mid + gap) + 1, by + 2, -1, 0, '#ffd23f');
+      }
     } else {
       const u = Math.min(1.25, k.u), reach = Math.min(k.range, k.dist * 1.25);
       const x = spotX + reach * u, lat = k.lateral * (reach * u / k.dist);

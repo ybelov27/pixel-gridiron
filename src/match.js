@@ -8,24 +8,28 @@ import { diffParams, driveOutcome, userDefRating, userTeam } from './league.js';
 const HASH_L = 23.6, HASH_R = 29.7;
 export const RUNOFF = 6; // game seconds between plays while the clock runs (ASSUMED)
 
+// Retro Bowl-style kick: tap when the power meter is full, then tap when the two arrows meet in the middle
 export class KickGame {
   constructor({ dist, kicker, wind, kind }) {
     this.dist = dist; this.kind = kind; this.wind = wind;
     this.acc = eff(kicker, 'ACC'); this.leg = eff(kicker, 'LEG'); this.cmp = eff(kicker, 'CMP');
     this.maxRange = 38 + this.leg * 3;
-    this.stage = 'aim'; this.t = 0; this.ang = 0; this.power = 0; this.pdir = 1; this.u = 0; this.done = false; this.good = false;
-    // calmer aim swing; accurate kickers swing slower and narrower
+    this.stage = 'power'; this.t = 0; this.aimT = 0; this.ang = 0; this.power = 0; this.pdir = 1; this.u = 0; this.done = false; this.good = false;
+    // arrows start at the edges and slide together; accurate kickers' arrows move slower over a narrower swing
     this.A = 3 + (10 - this.acc) * 0.5;                                   // swing width (degrees)
     const speed = 8 + (10 - this.acc) * 2.6 + (10 - this.cmp) * 0.6;   // degrees/second through the middle
     this.omega = speed / this.A;
+    this.ang = this.A;
     this.drift = this.wind * dist * 0.003;      // wind: ~1.5 yd at 40 yd in a 12 mph wind
   }
   update(dt) {
     this.t += dt;
-    if (this.stage === 'aim') this.ang = Math.sin(this.t * this.omega) * this.A;
-    else if (this.stage === 'power') {
-      this.power += this.pdir * dt * 1.15;
+    if (this.stage === 'power') {
+      this.power += this.pdir * dt * 1.3;
       if (this.power >= 1) { this.power = 1; this.pdir = -1; } else if (this.power <= 0) { this.power = 0; this.pdir = 1; }
+    } else if (this.stage === 'aim') {
+      // arrow gap: > 0 before they meet (kick goes right), < 0 once they've crossed (goes left)
+      this.aimT += dt; this.ang = Math.cos(this.aimT * this.omega) * this.A;
     } else if (this.stage === 'flight') {
       this.u += dt / 1.4;
       if (this.u >= 1.5) this.done = true;
@@ -34,12 +38,11 @@ export class KickGame {
   // where the ball crosses the goal line (yards from centre) for a given aim angle, wind included
   latFor(ang) { return Math.tan(ang * Math.PI / 180) * this.dist + this.drift; }
   tap() {
-    if (this.stage === 'aim') { this.lockAng = this.ang; this.stage = 'power'; return 'aim'; }
-    if (this.stage === 'power') {
-      this.lockPow = this.power; this.stage = 'flight';
+    if (this.stage === 'power') { this.lockPow = this.power; this.stage = 'aim'; return 'power'; }
+    if (this.stage === 'aim') {
+      this.lockAng = this.ang; this.stage = 'flight';
       this.range = this.lockPow * this.maxRange;
-      let lat = this.latFor(this.lockAng);
-      if (this.lockPow > 0.97) lat += (this.lockPow - 0.97) * 25 * (this.lockAng >= 0 ? 1 : -1); // only a maxed-out kick hooks
+      const lat = this.latFor(this.lockAng);
       this.lateral = lat;
       const short = this.range < this.dist;
       this.good = !short && Math.abs(lat) <= 3.08;
