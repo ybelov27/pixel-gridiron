@@ -240,19 +240,29 @@ export class GameScene {
   drawStands() {
     const W = G.W, m = this.m, y0 = this.top + HUD_H, ft = this.FT;
     rect(0, y0, W, ft - y0, m.night ? '#0e1030' : '#262a52');
-    // crowd rows anchored to the world so they scroll with the field
+    // crowd rows anchored to the world so they scroll with the field (column col sits at screen x 3*col - off)
     const off = Math.floor(this.camX * SX);
-    for (let row = 0; row < 3; row++) {
-      for (let sxp = -3; sxp < W + 3; sxp += 3) {
-        const col = Math.floor((sxp + off) / 3);
-        const hsh = (col * 2654435761 + row * 97) >>> 0;
-        if (hsh % 7 === 0) continue;
-        const bob = this.hype > 0 ? Math.round(Math.max(0, Math.sin(this.t * 18 + col * 0.7)) * 2) : (hsh % 23 === 0 ? Math.round(Math.sin(this.t * 4 + col)) : 0);
-        const x = sxp - ((off % 3) + 3) % 3;
-        const y = y0 + 1 + row * 3 - bob;
-        rect(x, y, 2, 2, CROWD[hsh % CROWD.length]);
-        if (m.night && row === 0 && hsh % 11 === 0) px(x, y - 1, '#fff');
+    const fan = (col, row, x, still) => {
+      const hsh = (col * 2654435761 + row * 97) >>> 0;
+      if (hsh % 7 === 0) return;
+      const fidget = hsh % 23 === 0;
+      if (still !== null && still === fidget) return; // layer: only the still fans; per frame: only the fidgeters
+      const bob = this.hype > 0 ? Math.round(Math.max(0, Math.sin(this.t * 18 + col * 0.7)) * 2) : (fidget ? Math.round(Math.sin(this.t * 4 + col)) : 0);
+      const y = y0 + 1 + row * 3 - bob;
+      rect(x, y, 2, 2, CROWD[hsh % CROWD.length]);
+      if (m.night && row === 0 && hsh % 11 === 0) px(x, y - 1, '#fff');
+    };
+    const cA = Math.floor(off / 3) - 1, cB = Math.ceil((off + W) / 3) + 1;
+    if (this.hype > 0) { for (let row = 0; row < 3; row++) for (let col = cA; col <= cB; col++) fan(col, row, 3 * col - off, null); }
+    else {
+      // still fans never change: draw them once into a strip covering every camera position
+      const c0 = -Math.ceil(W / 3) - 4, n = Math.ceil((140 * SX + 2 * W) / 3), key = [W, y0, m.night].join();
+      if (!this._crowd || this._crowdKey !== key) {
+        const c = this._crowd = document.createElement('canvas'); c.width = n * 3; c.height = y0 + 12; this._crowdKey = key;
+        G.drawTo(c, () => { for (let row = 0; row < 3; row++) for (let i = 0; i < n; i++) fan(c0 + i, row, 3 * i, true); });
       }
+      G.ctx.drawImage(this._crowd, 3 * c0 - off, 0);
+      for (let row = 0; row < 3; row++) for (let col = cA; col <= cB; col++) fan(col, row, 3 * col - off, false);
     }
     // ad boards in team colours
     rect(0, ft - 3, W, 3, m.me.c1);
@@ -260,9 +270,22 @@ export class GameScene {
     rect(0, ft - 1, W, 1, '#0b0d1c');
     if (m.night) for (let x = 20; x < W; x += 90) { rect(x, y0, 8, 2, '#fffbe0'); rect(x - 2, y0 + 2, 12, 1, 'rgba(255,251,224,0.4)'); }
   }
-  drawField() {
-    const m = this.m, W = G.W, FT = this.FT, SY = this.SY, fb = this.fieldB;
-    const x0 = Math.floor(this.camX - this.half - 2), x1 = Math.ceil(this.camX + this.half + 2);
+  // the turf, end zones, lines and numbers never change during a game: draw them once into a
+  // full-length layer and copy the visible slice each frame
+  fieldLayer() {
+    const m = this.m, key = [G.W, G.H, this.FT, this.SY, m.weather, m.me.id, m.opp.id, this.home().id].join();
+    if (this._layer && this._layerKey === key) return this._layer;
+    const c = this._layer || document.createElement('canvas');
+    c.width = 120 * SX + 2; c.height = G.H;
+    const save = [this.camX, this.shx, this.shy];
+    this.camX = G.W / 2 / SX; this.shx = 0; this.shy = 0; // world yard 0 lands on layer x 0
+    G.drawTo(c, () => this.drawFieldStatic(0, 120));
+    [this.camX, this.shx, this.shy] = save;
+    this._layer = c; this._layerKey = key;
+    return c;
+  }
+  drawFieldStatic(x0, x1) {
+    const m = this.m, W = 120 * SX + 2, FT = this.FT, SY = this.SY, fb = this.fieldB;
     const snow = m.weather === 'snow';
     for (let yd = Math.max(0, Math.floor(x0 / 5) * 5); yd < Math.min(120, x1); yd += 5) {
       let c = GREEN[(yd / 5) % 2];
@@ -318,6 +341,11 @@ export class GameScene {
         if (n !== 50) { const dir = v < 50 ? -1 : 1, ax = sx + dir * 11; for (let i = 0; i < 3; i++) rect(ax - dir * i, ty + 3 - i, 1, 1 + 2 * i, 'rgba(255,255,255,0.8)'); }
       }
     }
+  }
+  drawField() {
+    const m = this.m, W = G.W, FT = this.FT, SY = this.SY, fb = this.fieldB;
+    const snow = m.weather === 'snow';
+    G.ctx.drawImage(this.fieldLayer(), this.sx(0), 0);
     rect(0, FT - 1, W, 1, '#fff'); rect(0, fb, W, 1, '#fff');
     // sideline below the field
     rect(0, fb + 1, W, SIDE_H, snow ? '#7d9c86' : '#256f30');
@@ -431,7 +459,7 @@ export class GameScene {
     // entities, depth-sorted
     const ents = p.ents.slice().sort((a, b) => a.y - b.y);
     const bl = p.ball, inAir = bl.state === 'air', left = inAir ? bl.T - bl.t : 9;
-    const td = p.result && p.result.kind === 'td';
+    const td = p.result && p.result.kind === 'td', blur = app.career?.settings.blur !== false;
     for (const e of ents) {
       const off = e.side === 'off';
       const T = off ? m.me : m.opp;
@@ -459,12 +487,17 @@ export class GameScene {
       }
       // shadow shrinks as the player leaves the ground
       rect(x - 3 + Math.min(2, lift >> 1), y - 1, 7 - Math.min(4, lift), 2, 'rgba(0,0,0,0.3)');
-      // juke after-images
-      if (e === p.carrier && e.jukeT > 0 && e.trail.length > 12) {
-        const n = e.trail.length, ctx = G.ctx;
-        ctx.globalAlpha = 0.28;
-        for (const back of [10, 20]) { const tx = this.sx(e.trail[n - back - 2]), ty = this.sy(e.trail[n - back - 1]); const gi = playerSprite(T.c1, T.c2, fr, face, e.p.skin || 0, pants); drawSprite(gi, tx - 4, ty - gi.height + 1); }
-        ctx.globalAlpha = 1;
+      // after-images: a juke always leaves two; with motion blur on, a ball carrier at full tilt leaves a faint smear
+      if ((e === p.carrier || e === p.returner) && !down && e.trail.length > 44) {
+        const juke = e.jukeT > 0, a = juke ? 0.28 : blur ? clamp((sp - 6.2) / 3.5, 0, 1) * 0.3 : 0;
+        if (a > 0.02) {
+          const n = e.trail.length, ctx = G.ctx, gi = playerSprite(T.c1, T.c2, fr, face, e.p.skin || 0, pants);
+          (juke ? [10, 20] : [6, 12]).forEach((back, i) => {
+            ctx.globalAlpha = juke ? a : a / (i + 1);
+            drawSprite(gi, this.sx(e.trail[n - back - 2]) - 4, this.sy(e.trail[n - back - 1]) - gi.height + 1 - lift);
+          });
+          ctx.globalAlpha = 1;
+        }
       }
       if (this.celeb && this.celeb.e === e && p.result) { this.drawCeleb(e, x, y, T, pants, face); continue; }
       const img = playerSprite(T.c1, T.c2, fr, face, e.p.skin || 0, pants);
@@ -494,6 +527,11 @@ export class GameScene {
       // fading trail
       this.ballTrail.push([b.x, b.y, b.z]); if (this.ballTrail.length > 8) this.ballTrail.shift();
       this.ballTrail.forEach(([tx, ty, tz], i) => { if (i % 2) return; rect(this.sx(tx) - 1, this.sy(ty, tz) - 2, 2, 1, `rgba(255,255,255,${0.08 + i * 0.05})`); });
+      if (blur && b.state !== 'loose' && this.ballTrail.length >= 8) { // ghost balls smear a fast pass or kick
+        const ctx = G.ctx;
+        for (const [i, a] of [[3, 0.14], [5, 0.28]]) { const [tx, ty, tz] = this.ballTrail[i]; ctx.globalAlpha = a; ballSprite(this.sx(tx), this.sy(ty, tz) - 2, spin); }
+        ctx.globalAlpha = 1;
+      }
       const sh = Math.max(1, 4 - Math.round(b.z / 4));
       rect(this.sx(b.x) - sh, this.sy(b.y), sh * 2, 1, 'rgba(0,0,0,0.45)');
       ballSprite(bx, by, spin);
@@ -753,7 +791,9 @@ export class GameScene {
     big('PAUSED', W / 2, y + 7, '#ffd23f', { align: 'center', scale: 2 });
     UI.button(x + 20, y + 30, w - 40, 20, 'RESUME', () => { this.paused = false; }, { color: '#2fa84f' });
     UI.button(x + 20, y + 54, w - 40, 20, 'SIM REST OF GAME', () => { this.paused = false; if (m.phase !== 'final') m.simRest(); }, { color: '#4b5378' });
-    UI.button(x + 20, y + 78, w - 40, 20, `SOUND ${app.career.settings.sound ? 'ON' : 'OFF'}`, () => { app.career.settings.sound = !app.career.settings.sound; }, { color: '#2f6fe0' });
+    const st = app.career.settings, hw = (w - 44) / 2;
+    UI.button(x + 20, y + 78, hw, 20, `SOUND ${st.sound ? 'ON' : 'OFF'}`, () => { st.sound = !st.sound; }, { color: '#2f6fe0' });
+    UI.button(x + 24 + hw, y + 78, hw, 20, `BLUR ${st.blur !== false ? 'ON' : 'OFF'}`, () => { st.blur = st.blur === false; }, { color: '#2f6fe0' });
     if (this.onExit) UI.button(x + 20, y + 102, w - 40, 20, 'SAVE & EXIT', () => { this.paused = false; this.onExit(); }, { color: '#7e2553' });
     text('KEYS: SPACE SNAP  H HANDOFF  WASD / ARROWS', W / 2, y + 132, '#9aa3cf', 1, 'center');
     text('B BULLET  T TIMEOUT  ESC PAUSE', W / 2, y + 141, '#9aa3cf', 1, 'center');

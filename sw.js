@@ -1,5 +1,5 @@
 // Network-first service worker: always fresh when online, still playable offline.
-const CACHE = 'pixel-gridiron-62c77db7';
+const CACHE = 'pixel-gridiron-2af622b9';
 const FILES = [
  './',
  'index.html',

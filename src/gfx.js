@@ -233,20 +233,38 @@ function bigAtlas(color, bold) {
   return c;
 }
 export function bigWidth(s, scale = 1, bold = true) { return (String(s).length * (bold ? 7 : 6) - 1) * scale; }
-// chunky outlined text, the main display font
-export function big(s, x, y, color = '#fff', o = {}) {
-  s = String(s).toUpperCase();
-  const scale = o.scale || 1, bold = o.bold !== false, adv = (bold ? 7 : 6) * scale, cw = bold ? 6 : 5;
-  const wpx = bigWidth(s, scale, bold);
-  if (o.align === 'center') x -= Math.floor(wpx / 2); else if (o.align === 'right') x -= wpx;
-  x = Math.round(x); y = Math.round(y);
-  const draw = (col, dx, dy) => { const a0 = bigAtlas(col, bold), a = hi(a0), k = a === a0 ? 1 : HI;
+// chunky outlined text, the main display font. Each outlined string takes ~10 passes, so the
+// finished string is rendered once into its own small canvas and reused while it stays on screen.
+const bigStrCache = new Map();
+function bigStr(s, color, scale, bold, oc, shadow) {
+  const key = s + '|' + color + '|' + scale + bold + oc + shadow;
+  let c = bigStrCache.get(key);
+  if (c) return c;
+  if (bigStrCache.size > 400) bigStrCache.clear();
+  const adv = (bold ? 7 : 6) * scale, cw = bold ? 6 : 5, wpx = bigWidth(s, scale, bold);
+  c = document.createElement('canvas'); c.width = Math.max(1, wpx + 2 + scale); c.height = 7 * scale + scale + 3;
+  const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+  const draw = (col, dx, dy) => { const a = bigAtlas(col, bold);
     for (let i = 0; i < s.length; i++) { const j = bidx[s[i]]; if (j === undefined || s[i] === ' ') continue;
-      ctx.drawImage(a, j * cw * k, 0, cw * k, 7 * k, x + i * adv + dx, y + dy, cw * scale, 7 * scale); } };
-  const oc = o.outline === undefined ? '#0b0d1c' : o.outline;
-  if (o.shadow !== false && oc) draw(oc, 0, scale + (o.outline === null ? 0 : 1));
+      x.drawImage(a, j * cw, 0, cw, 7, 1 + i * adv + dx, 1 + dy, cw * scale, 7 * scale); } };
+  if (shadow && oc) draw(oc, 0, scale + 1);
   if (oc) for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) draw(oc, dx, dy);
   draw(color, 0, 0);
+  bigStrCache.set(key, c);
+  return c;
+}
+export function big(s, x, y, color = '#fff', o = {}) {
+  s = String(s).toUpperCase();
+  const scale = o.scale || 1, bold = o.bold !== false;
+  const wpx = bigWidth(s, scale, bold);
+  if (o.align === 'center') x -= Math.floor(wpx / 2); else if (o.align === 'right') x -= wpx;
+  const oc = o.outline === undefined ? '#0b0d1c' : o.outline;
+  ctx.drawImage(bigStr(s, color, scale, bold, oc, o.shadow !== false), Math.round(x) - 1, Math.round(y) - 1);
+}
+// run drawing calls against an offscreen canvas instead of the screen
+export function drawTo(c, fn) {
+  const prev = ctx; ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+  try { fn(); } finally { ctx = prev; }
 }
 
 // ---------- icons (9x9) ----------
