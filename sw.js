@@ -1,9 +1,35 @@
 // Network-first service worker: always fresh when online, still playable offline.
-const CACHE = 'pixel-gridiron-1936f49e';
-const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-152.png', 'icons/icon-167.png', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
-  'src/main.js', 'src/gfx.js', 'src/input.js', 'src/ui.js', 'src/app.js', 'src/audio.js', 'src/rng.js', 'src/data.js', 'src/players.js',
-  'src/play.js', 'src/playbook.js', 'src/match.js', 'src/league.js', 'src/office.js', 'src/flow.js', 'src/save.js',
-  'src/music.js', 'src/scenes/game.js', 'src/scenes/menus.js'];
+const CACHE = 'pixel-gridiron-fbbe0cae';
+const FILES = [
+ './',
+ 'index.html',
+ 'manifest.webmanifest',
+ 'icons/icon-152.png',
+ 'icons/icon-167.png',
+ 'icons/icon-180.png',
+ 'icons/icon-192.png',
+ 'icons/icon-512.png',
+ 'src/achievements.js',
+ 'src/app.js',
+ 'src/audio.js',
+ 'src/data.js',
+ 'src/flow.js',
+ 'src/gfx.js',
+ 'src/input.js',
+ 'src/league.js',
+ 'src/main.js',
+ 'src/match.js',
+ 'src/music.js',
+ 'src/office.js',
+ 'src/play.js',
+ 'src/playbook.js',
+ 'src/players.js',
+ 'src/rng.js',
+ 'src/save.js',
+ 'src/scenes/game.js',
+ 'src/scenes/menus.js',
+ 'src/ui.js'
+];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));

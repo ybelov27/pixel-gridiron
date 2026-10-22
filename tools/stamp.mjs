@@ -19,5 +19,10 @@ html = html.replace(/<script type="module" src="[^"]*"><\/script>/, `${map}\n<sc
 writeFileSync(join(root, 'index.html'), html);
 // bump the service worker cache name so installed copies refresh too
 const swp = join(root, 'sw.js');
-writeFileSync(swp, readFileSync(swp, 'utf8').replace(/const CACHE = '[^']*';/, `const CACHE = 'pixel-gridiron-${all}';`));
+let sw = readFileSync(swp, 'utf8').replace(/const CACHE = '[^']*';/, `const CACHE = 'pixel-gridiron-${all}';`);
+// keep the offline precache list in sync with every module in src/
+const statics = ['./', 'index.html', 'manifest.webmanifest', ...readdirSync(join(root, 'icons')).filter((f) => f.endsWith('.png')).sort().map((f) => `icons/${f}`)];
+const list = [...statics, ...Object.keys(imports).map((k) => k.slice(2))];
+sw = sw.replace(/const FILES = \[[\s\S]*?\];/, `const FILES = ${JSON.stringify(list, null, 1).replace(/"/g, "'")};`);
+writeFileSync(swp, sw);
 console.log(`stamped ${files.length} modules, build ${all}`);

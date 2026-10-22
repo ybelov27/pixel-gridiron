@@ -76,6 +76,9 @@ export class Match {
     this.ot = null; this.runoff = 0; this.conv = false; this.play = null; this.kick = null;
     this.ballYard = 25; this.ballY = 26.67; this.down = 1; this.toGo = 10; this.fd = 35;
     this.feed = []; this.sfx = [];
+    // per-game feats for achievements
+    this.feats = { tds: 0, longPass: 0, longRunTD: 0, krTD: false, fg50: false, twoPt: false, maxDeficit: 0, maxMisses: 0, stretched: false, hailMary: false, passYds: 0, passTD: 0, rushYds: 0 };
+    this.playMisses = 0;
     this.over = false;
     this.coin();
   }
@@ -103,6 +106,7 @@ export class Match {
   choice(title, options) { this.phase = 'choice'; this.choiceTitle = title; this.options = options; }
   skip() { if (this.phase === 'msg') this.timer = 0; if (this.phase === 'opp') this.oppFast = true; }
   update(dt) {
+    if (this.score.o - this.score.u > this.feats.maxDeficit) this.feats.maxDeficit = this.score.o - this.score.u;
     if (this.phase === 'msg') {
       this.timer -= dt;
       if (this.timer <= 0) { const n = this.next_; this.next_ = null; if (n) n(); }
@@ -114,7 +118,7 @@ export class Match {
     } else if (this.phase === 'live') {
       if (!this.conv) this.clock = Math.max(0, this.clock - dt);
       this.play.update(dt);
-      for (const e of this.play.events) this.sfx.push(e);
+      for (const e of this.play.events) { this.sfx.push(e); if (e === 'miss') this.playMisses++; }
       this.play.events.length = 0;
       if (this.play.done) this.afterPlay(this.play.result);
     } else if (this.phase === 'kick') {
@@ -144,12 +148,12 @@ export class Match {
   }
   startReturn() {
     this.play = new PlaySim({ mode: 'return', lineup: this.lineup, defRating: this.oppDef, diff: this.dp, rng: this.rng, weather: this.weather });
-    this.phase = 'live';
+    this.phase = 'live'; this.playMisses = 0;
     this.log(`${this.opp.abbr} KICK OFF`);
   }
   afterReturn(r) {
     this.play.done = false;
-    if (r.kind === 'td') { this.score.u += 6; this.sfx.push('td'); return this.say('KICK RETURN TOUCHDOWN!', () => this.afterTD('u'), 2.2); }
+    if (r.kind === 'td') { this.score.u += 6; this.feats.krTD = true; this.feats.tds++; this.feat(); this.sfx.push('td'); return this.say('KICK RETURN TOUCHDOWN!', () => this.afterTD('u'), 2.2); }
     if (r.kind === 'fumble') {
       const oy = clamp(Math.round(100 - (r.x - 10)), 1, 99);
       return this.say('FUMBLE ON THE RETURN!', () => this.next(() => this.oppDrive(oy)), 1.6);
@@ -176,7 +180,7 @@ export class Match {
     const pl = choosePlay(this.rng, { down: this.down, toGo: this.toGo, yard: this.ballYard, late });
     this.play = new PlaySim({ play: pl, lineup: this.lineup, defRating: this.oppDef, losX: 10 + this.ballYard, ballY: this.ballY,
       diff: this.dp, rng: this.rng, ocStars: this.c.coords.oc?.stars || 0, weather: this.weather });
-    this.phase = 'presnap';
+    this.phase = 'presnap'; this.playMisses = 0;
     if (!this.conv) this.checkpoint({ k: 'snap' });
   }
   toGoText() { return this.ballYard + this.toGo >= 100 ? 'GOAL' : String(Math.max(1, Math.round(this.toGo))); }
@@ -197,12 +201,17 @@ export class Match {
       if (r.receiver) {
         this.inc(r.passer, 'pcmp'); this.inc(r.passer, 'pyds', y); this.inc(r.receiver, 'rec'); this.inc(r.receiver, 'recyds', y);
         this.team.pyds += y;
-        if (r.kind === 'td') { this.inc(r.passer, 'ptd'); this.inc(r.receiver, 'rectd'); }
+        const F = this.feats; F.passYds += y; F.longPass = Math.max(F.longPass, y);
+        if (r.kind === 'td') {
+          this.inc(r.passer, 'ptd'); this.inc(r.receiver, 'rectd'); F.passTD++;
+          if (y >= 40 && this.clock <= 10 && (this.q === 2 || this.q === 4)) F.hailMary = true;
+        }
       }
       if (r.kind === 'int' || r.kind === 'pick6') this.inc(r.passer, 'pint');
     } else if (r.carrier && !r.sack) {
       this.inc(r.carrier, 'ratt'); this.inc(r.carrier, 'ryds', y); this.team.ryds += y;
-      if (r.kind === 'td') this.inc(r.carrier, 'rtd');
+      this.feats.rushYds += y;
+      if (r.kind === 'td') { this.inc(r.carrier, 'rtd'); this.feats.longRunTD = Math.max(this.feats.longRunTD, y); }
     }
   }
   afterPlay(r) {
@@ -210,13 +219,16 @@ export class Match {
     this.play.done = false; // consumed
     const wasConv = this.conv;
     if (!wasConv) this.recordPlay(r);
+    this.feats.maxMisses = Math.max(this.feats.maxMisses, this.playMisses);
+    if (!wasConv && r.kind === 'td') { this.feats.tds++; if (/STRETCHED/.test(r.msg || '')) this.feats.stretched = true; }
+    this.feat();
     if (r.carrier && r.carrier.id && r.carrierKind) r.carrier.condition = Math.max(35, (r.carrier.condition ?? 100) - (2.2 - eff(r.carrier, 'STA') * 0.12));
     if (r.passer && r.passer.id) r.passer.condition = Math.max(50, (r.passer.condition ?? 100) - 0.35);
     if (r.kind === 'tackle' || r.kind === 'fumble') this.maybeInjure(r.sack ? this.lineup.QB[0] : r.carrier, r.sack ? 0.006 : 0.0035);
     const endYard = r.x - 10;
     if (wasConv) {
       this.conv = false;
-      if (r.kind === 'td') { this.score.u += 2; this.sfx.push('td'); return this.say('2-POINT CONVERSION GOOD!', () => this.afterScore('u')); }
+      if (r.kind === 'td') { this.score.u += 2; this.feats.twoPt = true; this.feat(); this.sfx.push('td'); return this.say('2-POINT CONVERSION GOOD!', () => this.afterScore('u')); }
       return this.say('2-POINT TRY FAILS', () => this.afterScore('u'));
     }
     if (r.kind === 'td') {
@@ -311,7 +323,7 @@ export class Match {
     this.inc(this.K, 'fga');
     if (this.clock > 0) this.clock = Math.max(0, this.clock - 4);
     if (k.good) {
-      this.inc(this.K, 'fgm'); this.score.u += 3;
+      this.inc(this.K, 'fgm'); this.score.u += 3; if (k.dist >= 50) this.feats.fg50 = true; this.feat();
       return this.say(`${k.dist} YD FIELD GOAL IS GOOD!`, () => this.afterScore('u'), 1.6);
     }
     const oy = Math.round(clamp(100 - (this.ballYard - 7), 20, 99));
@@ -466,6 +478,8 @@ export class Match {
     for (const pos of ['QB', 'RB', 'WR', 'TE', 'OL']) for (const p of this.lineup[pos]) { s += p.stars * (pos === 'QB' ? 3 : 1); n += pos === 'QB' ? 3 : 1; }
     return s / n + (this.c.coords.oc?.stars || 0) * 0.12;
   }
+  // live achievement check after anything that can earn one
+  feat() { if (this.onFeat) this.onFeat(this.feats); }
   // ---------- in-game autosave ----------
   // A checkpoint is taken before every snap and every opponent drive; the scene persists it with the career.
   checkpoint(next) {
@@ -473,7 +487,7 @@ export class Match {
       v: 1, h: this.g.h, a: this.g.a, q: this.q, clock: this.clock, score: { ...this.score }, to: { ...this.to },
       ballYard: this.ballYard, ballY: this.ballY, down: this.down, toGo: this.toGo, fd: this.fd, goForIt: !!this.goForIt,
       stats: JSON.parse(JSON.stringify(this.stats)), team: { ...this.team }, ot: this.ot ? JSON.parse(JSON.stringify(this.ot)) : null,
-      firstRecv: this.firstRecv, weather: this.weather, night: this.night, wind: this.wind, rng: this.rng.s, injured: [...(this.injured || [])], next,
+      firstRecv: this.firstRecv, weather: this.weather, night: this.night, wind: this.wind, rng: this.rng.s, injured: [...(this.injured || [])], feats: { ...this.feats }, next,
     };
     if (this.onCheckpoint) this.onCheckpoint(this.saved);
   }
@@ -483,6 +497,7 @@ export class Match {
     Object.assign(m, { q: s.q, clock: s.clock, score: { ...s.score }, to: { ...s.to }, ballYard: s.ballYard, ballY: s.ballY, down: s.down,
       toGo: s.toGo, fd: s.fd, goForIt: s.goForIt, stats: s.stats, team: s.team, ot: s.ot, firstRecv: s.firstRecv,
       weather: s.weather, night: s.night, wind: s.wind, injured: s.injured || [] });
+    if (s.feats) m.feats = { ...m.feats, ...s.feats };
     m.rng.s = s.rng;
     if (m.injured.length) m.rebuildLineup();
     const q = m.q <= 4 ? `Q${m.q}` : 'OT';
@@ -495,7 +510,7 @@ export class Match {
     this.lineup = buildLineup(this.c.roster.filter((p) => !out.has(p.id)), this.c.regulars);
   }
   result() {
-    return { us: this.score.u, them: this.score.o, ot: this.q >= 5, stats: this.stats, oppId: this.opp.id, injuries: this.injuries || [] };
+    return { us: this.score.u, them: this.score.o, ot: this.q >= 5, stats: this.stats, oppId: this.opp.id, injuries: this.injuries || [], feats: this.feats };
   }
 }
 export function yardText(y) { y = Math.round(y); return y === 50 ? 'THE 50' : y < 50 ? `OWN ${y}` : `OPP ${100 - y}`; }

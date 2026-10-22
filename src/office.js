@@ -185,7 +185,7 @@ export function nextDraftRound(c) {
   c.draft.round++;
   if (c.draft.kind === 'initial') {
     if (c.draft.round > c.draft.rounds) {
-      c.stage = null; c.draft = null; syncUserTeamRatings(c);
+      c.stage = null; c.draft = null; c.fantasyDone = true; syncUserTeamRatings(c);
       addNews(c, `FANTASY DRAFT COMPLETE - ${c.roster.length} STARS SIGNED.`);
     } else genInitialRound(c);
     return;
@@ -213,6 +213,7 @@ export function postGame(c, info) {
   const upset = (opp.off + opp.def) - (me.off + me.def);
   c.job = clamp(c.job + (won ? 2 : tie ? 0 : -2) + (won && upset > 0.5 ? 1 : 0) + (!won && !tie && upset < -0.5 ? -1 : 0) + (info.title ? 10 : 0), 0, 100);
   if (won) { c.coach.wins++; } else if (tie) c.coach.ties++; else c.coach.losses++;
+  c.streak = won ? (c.streak || 0) + 1 : 0;
   c.dyn = clamp(c.dyn + (won ? 0.05 + (margin >= 14 ? 0.05 : 0) : tie ? 0 : -0.08), -0.5, 1);
   const lu = buildLineup(c.roster, c.regulars);
   const starters = new Set(Object.values(lu).flat().filter((p) => !p.regular));

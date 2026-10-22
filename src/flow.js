@@ -3,6 +3,7 @@ import { clamp } from './rng.js';
 import { rngOf, saveRng, recordResult, simOtherGames, simGame, teamRatings, userGameThisWeek, seedPlayoffs, advancePlayoffs,
   addNews, WEEKS, userTeam, diffParams, teamName, userEliminated, ROUND_NAMES } from './league.js';
 import { postGame, weekly, genFreeAgents, coordPool } from './office.js';
+import { checkGame, checkCareer } from './achievements.js';
 import { buildLineup } from './players.js';
 
 export function startSeason(c) {
@@ -73,6 +74,7 @@ export function finishUserGame(c, g, res) {
   const sum = postGame(c, { ...res, playoff, title: playoff && round === 3 && won });
   weekly(c);
   advance(c);
+  checkGame(c, res);
   sum.opp = opp.abbr; sum.ot = res.ot; sum.round = playoff ? ROUND_NAMES[round] : `WEEK ${c.phase === 'regular' ? c.week : WEEKS}`;
   return sum;
 }
@@ -101,5 +103,6 @@ export function simRound(c) {
   saveRng(c, rng);
   weekly(c);
   advance(c);
+  checkCareer(c);
 }
 export { userEliminated };

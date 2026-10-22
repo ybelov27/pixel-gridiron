@@ -10,6 +10,7 @@ import * as O from '../src/office.js';
 import { status, startSeason, simUserGame, simRound, finishUserGame, resumableGame } from '../src/flow.js';
 import { serialize, deserialize } from '../src/save.js';
 import { SONGS } from '../src/music.js';
+import { ACHIEVEMENTS, achCount, unlock } from '../src/achievements.js';
 
 let passed = 0;
 const test = (name, fn) => { try { fn(); passed++; console.log('ok  -', name); } catch (e) { console.error('FAIL-', name, '\n', e); process.exitCode = 1; } };
@@ -240,6 +241,25 @@ test('harder difficulty pays more CC; touchdown songs can be bought and equipped
   assert.equal(c.cc, 1); assert.equal(c.music.equipped, SONGS[1].id);
   assert.equal(O.equipSong(c, SONGS[0]), null); assert.equal(c.music.equipped, 'fanfare');
   assert.equal(deserialize(serialize(c)).music.owned.length, 2);
+});
+test('achievements unlock once, pay CC, and survive a reload', () => {
+  const c = newCareer({ seed: 61, teamId: 7 }); startSeason(c);
+  const before = c.cc;
+  assert.equal(unlock(c, 'dj'), true); assert.equal(unlock(c, 'dj'), false);
+  assert.equal(c.cc, before + 2);
+  // play a real game with the autopilot: feats are tracked and checked live + at the whistle
+  const g = userGameThisWeek(c), m = new Match(c, g);
+  let live = 0; m.onFeat = () => live++;
+  autopilot(m);
+  finishUserGame(c, g, m.result());
+  console.log(`      after one game: ${achCount(c)}/${ACHIEVEMENTS.length} unlocked (${Object.keys(c.ach).join(', ')})`);
+  assert.ok(live > 0, 'live feat checks fire during the game');
+  // season-long ones
+  runCareer(c, 1, false);
+  assert.ok(c.ach.first_win, 'winning a game unlocks FIRST VICTORY');
+  const c2 = deserialize(serialize(c));
+  assert.deepEqual(Object.keys(c2.ach).sort(), Object.keys(c.ach).sort());
+  console.log(`      after a season: ${achCount(c)}/${ACHIEVEMENTS.length}`);
 });
 test('deserialize rejects garbage', () => {
   assert.throws(() => deserialize('{"hello":1}'));

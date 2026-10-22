@@ -5,6 +5,7 @@ import { UI, fitText } from '../ui.js';
 import { app } from '../app.js';
 import { sfx, playSong, unlockAudio } from '../audio.js';
 import { SONGS, songEvents } from '../music.js';
+import { ACHIEVEMENTS, achCount, checkLive } from '../achievements.js';
 import { TEAM_DATA, CONFS, CONF_ABBR, DIVS } from '../data.js';
 import { DIFF_MULT, newCareer, userTeam, teamName, DIFFS, WEEKS, userGameThisWeek, divisionTeams, ROUND_NAMES, teamRatings, diffParams, userEliminated } from '../league.js';
 import { ATTRS, ATTR_LABEL, MAX_STARS, displayName, xpForLevel, buildLineup, ovr, ovrColor, traitInfo } from '../players.js';
@@ -47,6 +48,7 @@ function toggleFullscreen() {
 // start (or resume) this week's game; every between-play checkpoint is saved with the career
 export function launchGame(c, g, snap = null) {
   const m = snap ? Match.resume(c, g, snap) : new Match(c, g);
+  m.onFeat = (f) => checkLive(c, f);
   m.onCheckpoint = (s) => { c.inGame = { h: g.h, a: g.a, phase: c.phase, week: c.week, round: c.playoffs ? c.playoffs.round : -1, snap: s }; app.autosave(); };
   const sc = new GameScene(m, (res) => {
     const s = finishUserGame(c, g, res); saveCareer(c); app.go(new PostGameScene(s));
@@ -674,10 +676,13 @@ export class PlayoffsScene {
 
 // ===================================================================== HISTORY / NEWS
 export class HistoryScene {
-  constructor() { this.page = 0; }
+  constructor(tab = 0) { this.page = 0; this.tab = tab; this.apage = 0; }
   draw() {
     const c = app.career, co = c.coach;
-    header('CAREER HISTORY');
+    header(this.tab ? 'ACHIEVEMENTS' : 'CAREER HISTORY', this.tab ? `${achCount(c)}/${ACHIEVEMENTS.length} UNLOCKED` : '');
+    UI.button(W - 140, 22, 64, 13, 'CAREER', () => { this.tab = 0; }, { selected: !this.tab, color: !this.tab ? C.blue : '#4b5378', small: true });
+    UI.button(W - 72, 22, 68, 13, `TROPHIES`, () => { this.tab = 1; }, { selected: !!this.tab, color: this.tab ? C.blue : '#4b5378', small: true });
+    if (this.tab) return this.drawAch(c);
     panel(4, 20, 376, 34);
     text(`COACH ${co.name}`, 12, 26, C.gold);
     text(`CAREER ${co.wins}-${co.losses}-${co.ties}   TITLES ${co.titles}   TEAMS ${co.teams.join(' > ')}`, 12, 38, '#fff');
@@ -691,6 +696,27 @@ export class HistoryScene {
     });
     pager(this, c.history.length, per, 300, 200);
     if (c.seasonEnd) UI.button(8, 198, 120, 14, 'LAST SEASON AWARDS', () => app.go(new AwardsScene()), { color: C.blue });
+  }
+  drawAch(c) {
+    const per = 8, got = c.ach || {};
+    // unlocked first, then the rest in list order
+    const list = ACHIEVEMENTS.slice().sort((a, b) => (got[b[0]] ? 1 : 0) - (got[a[0]] ? 1 : 0));
+    const pages = Math.ceil(list.length / per);
+    const done = achCount(c);
+    rect(8, 26, 160, 5, '#0b0d1c'); rect(9, 27, Math.round(158 * done / ACHIEVEMENTS.length), 3, C.gold);
+    list.slice(this.apage * per, this.apage * per + per).forEach(([id, name, desc, cc], i) => {
+      const y = 38 + i * 19, on = !!got[id];
+      panel(4, y, 376, 17, on ? '#3a3410' : C.panel);
+      G.icon('trophy', 9, y + 4, on ? '#ffd23f' : '#4b5378');
+      big(name, 22, y + 5, on ? C.gold : '#9aa3cf', { shadow: false });
+      text(desc, 22 + bigWidth(name) + 8, y + 6, on ? '#fff' : C.dim);
+      text(on ? `Y${got[id].y}` : `+${cc} CC`, 374, y + 6, on ? C.good : C.gold, 1, 'right');
+    });
+    if (pages > 1) {
+      UI.button(8, 199, 18, 13, '<', () => { this.apage = (this.apage + pages - 1) % pages; }, { color: '#4b5378' });
+      text(`${this.apage + 1}/${pages}`, 40, 203, C.dim, 1, 'center');
+      UI.button(54, 199, 18, 13, '>', () => { this.apage = (this.apage + 1) % pages; }, { color: '#4b5378' });
+    }
   }
 }
 export class NewsScene {

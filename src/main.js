@@ -9,6 +9,7 @@ import { saveCareer } from './save.js';
 import { TitleScene, HubScene, launchGame } from './scenes/menus.js';
 import { loadCareer } from './save.js';
 import { resumableGame } from './flow.js';
+import { checkCareer, achById } from './achievements.js';
 
 const STEP = 1 / 60;
 initCanvas(document.getElementById('c'));
@@ -16,6 +17,7 @@ initInput(getCanvas());
 let saveFailWarned = false;
 app.autosave = () => {
   if (!app.career) return;
+  checkCareer(app.career);
   if (saveCareer(app.career)) app.savedT = 1.2;
   else if (!saveFailWarned) { saveFailWarned = true; app.toast('COULD NOT SAVE - STORAGE IS FULL OR BLOCKED', 4); }
 };
@@ -109,6 +111,12 @@ function step() {
   if (app.toastT > 0) app.toastT -= STEP;
   if (app.fadeT > 0) app.fadeT -= STEP;
   if (app.savedT > 0) app.savedT -= STEP;
+  const q = app.career && app.career.newAch;
+  if (!app.ach && q && q.length) {
+    app.ach = q.length >= 3 ? { burst: q.splice(0).length, t: 0 } : { id: q.shift(), t: 0 };
+    sfx.good(); app.autosave();
+  }
+  if (app.ach && (app.ach.t += STEP) > 3) app.ach = null;
 }
 function render() {
   const W = G.W, H = G.H;
@@ -133,6 +141,15 @@ function render() {
     rect(x + 3, y + 4, 1, 1, '#3ccf6a'); rect(x + 4, y + 5, 1, 1, '#3ccf6a'); rect(x + 5, y + 4, 1, 1, '#3ccf6a'); rect(x + 6, y + 3, 1, 1, '#3ccf6a');
   }
   if (app.modal) { UI.begin(); drawModal(); }
+  if (app.ach) {
+    const a = app.ach, slide = Math.min(1, a.t * 5, (3 - a.t) * 5), w = 236, x = Math.floor((W - w) / 2), y = Math.round(-30 + 34 * slide) + G.SAFE.t;
+    const info = a.id ? achById(a.id) : null;
+    G.rect(x - 1, y - 1, w + 2, 28, '#0b0d1c'); G.rect(x, y, w, 26, '#3a3410'); G.rect(x, y, w, 1, '#ffd23f'); G.rect(x, y + 25, w, 1, '#8a6d10');
+    G.icon('trophy', x + 7, y + 9, '#ffd23f');
+    text('ACHIEVEMENT UNLOCKED', x + 22, y + 4, '#ffd23f');
+    if (info) { big(info[1], x + 22, y + 13, '#fff', { shadow: false }); big(`+${info[3]} CC`, x + w - 6, y + 13, '#3ccf6a', { align: 'right', shadow: false }); }
+    else big(`${a.burst} ACHIEVEMENTS!`, x + 22, y + 13, '#fff', { shadow: false });
+  }
   if (app.toastT > 0) {
     const tw = Math.min(W - 20, app.toastText.length * 4 + 16);
     const ty = H - 22 - G.SAFE.b;

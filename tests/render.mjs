@@ -39,6 +39,7 @@ test('every menu screen draws', () => {
   for (const K of ['RosterScene', 'OfficeScene', 'FAScene', 'ScheduleScene', 'StandingsScene', 'PlayoffsScene', 'HistoryScene', 'NewsScene', 'SettingsScene']) draw(new S[K]());
   const o = new S.OfficeScene(); o.tab = 1; draw(o); o.tab = 2; draw(o);
   draw(new S.PlayerScene(c.roster[0], 'roster', () => {}));
+  c.ach = { first_win: { y: 1, w: 3 }, dj: { y: 1, w: 4 } }; draw(new S.HistoryScene(1));
   const s = simUserGame(c); draw(new S.PostGameScene(s));
   while (c.phase === 'regular') simUserGame(c);
   draw(new S.PlayoffsScene());
