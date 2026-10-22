@@ -5,8 +5,8 @@ import { eff } from './players.js';
 
 export const FW = 53.33;
 export const spdOf = (v) => 6.0 + v * 0.32;
-// every QB can go deep; a strong arm adds range and zip rather than gating the deep ball
-export const maxThrow = (arm) => 52 + arm * 2.2;
+// arm strength sets how far a QB can throw (weak ~35 yd, elite ~72 yd) and how fast the ball gets there
+export const maxThrow = (arm) => 22 + arm * 5;
 const RAD = Math.PI / 180;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 

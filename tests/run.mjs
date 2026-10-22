@@ -209,8 +209,9 @@ test('old saves get named regulars and player skills on load', () => {
   const lu = buildLineup(c2.roster, c2.regulars);
   assert.ok(Object.values(lu).flat().every((p) => p.last && p.last !== 'REGULAR'), 'every lineup slot is a named player');
 });
-test('every QB can throw deep; arm strength adds zip', () => {
-  assert.ok(maxThrow(2) >= 55);
+test('arm strength decides who can throw deep, and adds zip', () => {
+  assert.ok(maxThrow(2.5) < 36, 'weak arms are short');
+  assert.ok(maxThrow(10) >= 70, 'elite arms go deep');
   assert.ok(flightOf(40, false, 10).T < flightOf(40, false, 2).T);
 });
 test('deserialize rejects garbage', () => {
