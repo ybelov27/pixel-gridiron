@@ -1,6 +1,7 @@
 // Career persistence: localStorage autosave + JSON export/import.
 import { SAVE_VERSION, migrateCareer } from './league.js';
 export const SAVE_KEY = 'pixelgridiron.career.v1';
+const TIME_KEY = 'pixelgridiron.savedAt';
 
 export function serialize(c) { return JSON.stringify(c); }
 export function deserialize(str) {
@@ -17,12 +18,13 @@ export function deserialize(str) {
 function store() { try { return window.localStorage; } catch (_) { return null; } }
 export function saveCareer(c) {
   const s = store(); if (!s || !c) return false;
-  try { s.setItem(SAVE_KEY, serialize(c)); return true; } catch (_) { return false; }
+  try { s.setItem(SAVE_KEY, serialize(c)); s.setItem(TIME_KEY, String(Date.now())); return true; } catch (_) { return false; }
 }
 export function loadCareer() {
   const s = store(); if (!s) return null;
   try { const v = s.getItem(SAVE_KEY); return v ? deserialize(v) : null; } catch (_) { return null; }
 }
+export function savedAt() { const s = store(); try { return s ? +s.getItem(TIME_KEY) || 0 : 0; } catch (_) { return 0; } }
 export function hasSave() { const s = store(); try { return !!(s && s.getItem(SAVE_KEY)); } catch (_) { return false; } }
 export function deleteSave() { const s = store(); try { s && s.removeItem(SAVE_KEY); } catch (_) {} }
 export function exportCareer(c) {

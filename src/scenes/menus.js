@@ -11,7 +11,7 @@ import * as O from '../office.js';
 import { startSeason, status, simUserGame, finishUserGame, simRound, opponentOf, resumableGame } from '../flow.js';
 import { Match } from '../match.js';
 import { GameScene } from './game.js';
-import { saveCareer, loadCareer, hasSave, deleteSave, exportCareer, importCareer } from '../save.js';
+import { saveCareer, loadCareer, hasSave, deleteSave, exportCareer, importCareer, savedAt } from '../save.js';
 
 const C = { bg: THEME.bg, panel: THEME.panel, gold: THEME.gold, dim: THEME.dim, good: '#2fa84f', bad: THEME.bad, blue: THEME.blue, white: THEME.text };
 const hub = () => app.go(new HubScene());
@@ -33,6 +33,7 @@ function pager(state, total, perPage, x, y) {
   text(`${state.page + 1}/${pages}`, x + 31, y + 4, C.dim, 1, 'center');
   UI.button(x + 44, y, 18, 13, '>', () => { state.page = Math.min(pages - 1, state.page + 1); }, { color: '#4b5378' });
 }
+const ago = (t) => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? 'JUST NOW' : s < 3600 ? `${Math.floor(s / 60)} MIN AGO` : s < 86400 ? `${Math.floor(s / 3600)} HR AGO` : `${Math.floor(s / 86400)} DAYS AGO`; };
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const standalone = () => navigator.standalone || matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches;
 const canFullscreen = () => !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen) && !standalone();
@@ -103,7 +104,10 @@ export class TitleScene {
         app.career = c;
         const r = resumableGame(c);
         if (r) launchGame(c, r.g, r.snap); else hub();
-      }, { color: '#2fa84f' }); y += 26;
+      }, { color: '#2fa84f' });
+      const at = savedAt();
+      if (at) text(`SAVED ${ago(at)}`, SW / 2, y + 24, '#fff', 1, 'center');
+      y += 32;
     }
     UI.button(bx0, y, bw, 22, 'NEW CAREER', () => app.go(new NewCareerScene())); y += 26;
     UI.button(bx0, y, bw, 18, 'IMPORT SAVE', () => importCareer().then((c) => { app.career = c; saveCareer(c); app.toast('SAVE IMPORTED'); hub(); }).catch((e) => app.toast(String(e.message || e).toUpperCase())), { color: '#7e2553' });
@@ -117,7 +121,7 @@ export class TitleScene {
 
 // ===================================================================== NEW CAREER
 export class NewCareerScene {
-  constructor() { this.team = 0; this.diff = 'MEDIUM'; this.qlen = 2; this.dynamic = true; this.noAutosave = true; }
+  constructor() { this.team = 0; this.diff = 'MEDIUM'; this.qlen = 2; this.dynamic = true; this.draft = true; this.noAutosave = true; }
   draw() {
     header('NEW CAREER', 'PICK YOUR CLUB', () => app.go(new TitleScene()));
     const d = TEAM_DATA[this.team];
@@ -137,12 +141,16 @@ export class NewCareerScene {
     DIFFS.forEach((df, i) => UI.button(8 + i * 93, 120, 89, 18, df, () => { this.diff = df; }, { selected: this.diff === df, color: this.diff === df ? C.blue : '#4b5378' }));
     big('QUARTER LENGTH', 8, 146, C.gold);
     [1, 2, 3].forEach((q, i) => UI.button(8 + i * 58, 156, 54, 18, `${q} MIN`, () => { this.qlen = q; }, { selected: this.qlen === q, color: this.qlen === q ? C.blue : '#4b5378' }));
-    big('DYNAMIC DIFF.', 196, 146, C.gold);
+    big('DYNAMIC', 196, 146, C.gold);
     UI.button(196, 156, 72, 18, this.dynamic ? 'ON' : 'OFF', () => { this.dynamic = !this.dynamic; }, { color: this.dynamic ? C.good : '#4b5378' });
+    big('STAR ROSTER', 276, 146, C.gold);
+    UI.button(276, 156, 100, 18, this.draft ? 'DRAFT THEM' : 'RANDOM', () => { this.draft = !this.draft; }, { color: this.draft ? '#ff9f1c' : '#4b5378' });
     UI.button(W / 2 - 80, 184, 160, 26, 'START CAREER', () => {
       const go = () => {
-        app.career = newCareer({ teamId: this.team, difficulty: this.diff, qlen: this.qlen, dynamic: this.dynamic });
-        saveCareer(app.career); hub();
+        app.career = newCareer({ teamId: this.team, difficulty: this.diff, qlen: this.qlen, dynamic: this.dynamic, draftStart: this.draft });
+        if (this.draft) O.genDraftRound(app.career);
+        saveCareer(app.career);
+        if (this.draft) app.go(new DraftScene()); else hub();
       };
       if (hasSave()) app.confirm('OVERWRITE SAVE?', ['STARTING A NEW CAREER REPLACES YOUR CURRENT SAVE. EXPORT IT FIRST FROM SETTINGS IF YOU WANT TO KEEP IT.'], go, 'START');
       else go();
@@ -264,6 +272,12 @@ export class HubScene {
       return;
     }
     const stage = c.stage;
+    if (c.draft && c.draft.kind === 'initial') {
+      big('FANTASY DRAFT', X, 48, C.gold, { scale: 2 });
+      ['PICK YOUR STARS BEFORE SEASON 1.', `ROUND ${c.draft.round} OF ${c.draft.rounds} - ${c.roster.length} STARS SO FAR.`].forEach((l, i) => text(l, X, 70 + i * 9, '#fff'));
+      UI.button(X, 140, R - X - 4, 30, `DRAFT ROUND ${c.draft.round}`, () => app.go(new DraftScene()), { color: '#ff9f1c' });
+      return;
+    }
     big(`OFFSEASON ${c.year}`, X, 48, C.gold, { scale: 2 });
     const go = { awards: ['SEASON REVIEW', () => app.go(new AwardsScene())], fired: ['JOB OFFERS', () => app.go(new FiredScene())],
       resign: ['RE-SIGN PLAYERS', () => app.go(new ResignScene())], draft: [`DRAFT ROUND ${c.draft?.round}`, () => app.go(new DraftScene())],
@@ -476,20 +490,31 @@ export class DraftScene {
   draw() {
     const c = app.career, d = c.draft;
     if (!d || c.stage !== 'draft') { hub(); return; }
-    header(`DRAFT - ROUND ${d.round} OF 3`, `${c.roster.length}/${MAX_STARS} STARS  ROOM ${money(O.capRoom(c))}`);
-    rosterRows(d.pool, 22, (p) => this.open(p), { scout: true, col4: 'POT', c4: (p, y) => text(`${p.scout.potLo}-${p.scout.potHi}`, 196, y, '#c2c3c7'), col5: '', c5: () => {} });
+    const initial = d.kind === 'initial';
+    header(initial ? `FANTASY DRAFT ${d.round}/${d.rounds}` : `DRAFT - ROUND ${d.round} OF 3`, `${c.roster.length}/${MAX_STARS} STARS  ROOM ${money(O.capRoom(c))}`);
+    rosterRows(d.pool, 22, (p) => this.open(p), { scout: !initial, col4: 'POT', c4: (p, y) => text(initial ? `${p.pot}` : `${p.scout.potLo}-${p.scout.potHi}`, 196, y, '#c2c3c7'),
+      col5: 'SKILL', c5: (p, y) => text(fitText(p.trait || '', 30), 226, y, '#ffd23f') });
     d.pool.forEach((p, i) => UI.button(338, 29 + i * 12, 42, 10, 'PICK', () => this.pick(p), { color: C.good }));
-    text('SCOUTED RATINGS ARE ESTIMATES (+-0.5). ROOKIE DEALS: 3 YEARS.', 8, 120, C.dim);
-    UI.button(8, 134, 110, 16, 'SKIP THIS PICK', () => { O.nextDraftRound(c); if (c.stage !== 'draft') hub(); }, { color: '#4b5378' });
-    UI.button(124, 134, 110, 16, 'MANAGE ROSTER', () => app.go(new RosterScene()), { color: C.blue });
-    if (d.picks.length) text(`DRAFTED: ${d.picks.map((id) => { const p = c.roster.find((x) => x.id === id); return p ? `${p.pos} ${p.last}` : '?'; }).join(', ')}`, 8, 160, C.good);
+    const y0 = 31 + d.pool.length * 12;
+    if (initial) {
+      const missing = ['QB', 'RB', 'WR', 'TE', 'OL', 'K', 'DL', 'LB', 'DB'].filter((pos) => !c.roster.some((p) => p.pos === pos));
+      text('BUILD YOUR TEAM: ONE STAR PER ROUND. OPEN SPOTS ARE FILLED BY REGULARS.', 8, y0, C.dim);
+      text(`NO STAR YET AT: ${missing.join(' ') || 'NONE - FULL SQUAD!'}`, 8, y0 + 9, missing.length ? '#ffa300' : C.good);
+    } else text('SCOUTED RATINGS ARE ESTIMATES (+-0.5). ROOKIE DEALS: 3 YEARS.', 8, y0, C.dim);
+    UI.button(8, y0 + 20, 110, 16, initial ? 'SKIP ROUND' : 'SKIP THIS PICK', () => { O.nextDraftRound(c); if (c.stage !== 'draft') hub(); }, { color: '#4b5378' });
+    UI.button(124, y0 + 20, 110, 16, 'MANAGE ROSTER', () => app.go(new RosterScene()), { color: C.blue });
+    if (d.picks.length) {
+      const names = d.picks.map((id) => { const p = c.roster.find((x) => x.id === id); return p ? `${p.pos} ${p.last}` : '?'; }).join(', ');
+      wrap(`${initial ? 'YOUR PICKS' : 'DRAFTED'}: ${names}`, 92).slice(0, 2).forEach((l, i) => text(l, 8, y0 + 42 + i * 8, C.good));
+    }
   }
   open(p) { app.go(new PlayerScene(p, 'draft', () => app.go(new DraftScene()), ['DRAFT HIM', () => this.pick(p)])); }
   pick(p) {
     const c = app.career;
+    const initial = c.draft.kind === 'initial';
     if (err(O.draftPick(c, p))) return;
-    app.toast(`DRAFTED ${p.pos} ${displayName(p)} - TRUE RATING ${p.stars}`);
-    if (c.stage === 'draft') app.go(new DraftScene()); else app.go(new FAScene());
+    app.toast(initial ? `PICKED ${p.pos} ${displayName(p)} (${p.trait})` : `DRAFTED ${p.pos} ${displayName(p)} - TRUE RATING ${p.stars}`);
+    if (c.stage === 'draft') app.go(new DraftScene()); else if (initial) { app.toast('FANTASY DRAFT DONE - START YOUR SEASON!'); hub(); } else app.go(new FAScene());
   }
 }
 
@@ -680,6 +705,7 @@ export class SettingsScene {
     UI.button(12, 130, 80, 16, s.sound ? 'ON' : 'OFF', () => { s.sound = !s.sound; }, { color: s.sound ? C.good : '#4b5378' });
     text('SAVE DATA - AUTOSAVES EVERY PLAY, EVERY MENU ACTION AND WHEN YOU LEAVE', 12, 154, C.gold);
     UI.button(250, 130, 120, 16, app.installPrompt ? 'INSTALL APP' : '+ HOME SCREEN', installHelp, { color: '#2fa84f' });
+    UI.button(250, 34, 120, 16, 'TITLE SCREEN', () => { app.autosave(); app.go(new TitleScene()); }, { color: '#4b5378' });
     UI.button(12, 162, 110, 16, 'EXPORT SAVE', () => { exportCareer(c); app.toast('SAVE EXPORTED AS JSON'); }, { color: C.blue });
     UI.button(128, 162, 110, 16, 'IMPORT SAVE', () => importCareer().then((nc) => { app.career = nc; saveCareer(nc); app.toast('SAVE IMPORTED'); hub(); }).catch((e) => app.toast(String(e.message || e).toUpperCase())), { color: '#5d275d' });
     UI.button(244, 162, 110, 16, 'DELETE SAVE', () => app.confirm('DELETE SAVE?', ['THIS ERASES YOUR CAREER FROM THIS BROWSER. THIS CANNOT BE UNDONE.'], () => { deleteSave(); app.career = null; app.go(new TitleScene()); }, 'DELETE'), { color: '#b13e53' });

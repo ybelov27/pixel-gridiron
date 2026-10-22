@@ -13,7 +13,7 @@ export function startSeason(c) {
 }
 // what the hub should offer next
 export function status(c) {
-  if (c.phase === 'preseason') return 'start';
+  if (c.phase === 'preseason') return c.stage === 'draft' ? 'off:draft' : 'start';
   if (c.phase === 'regular') return 'play';
   if (c.phase === 'playoffs') {
     if (c.playoffs.champion !== null) return 'review';

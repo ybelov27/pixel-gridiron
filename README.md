@@ -11,7 +11,7 @@ It plays in landscape on iPhone, iPad, Android and desktop.
 
 **Add it to your Home Screen.** On iPhone or iPad, open the link in Safari (or Chrome), tap **Share → Add to Home Screen → Add**, then launch it from the icon. It runs fullscreen and keeps working offline. The **+ HOME SCREEN** button on the title screen (and in MENU) shows these steps. On Android and desktop Chrome, the same button becomes a one-tap **INSTALL APP**. The Home Screen app keeps its own save, separate from the browser tab. To move a career over, use MENU → Export Save in the browser, then Import Save in the app.
 
-**It always autosaves.** The game saves after every menu action and every game, before every snap and every opponent drive, every 15 seconds, and whenever you switch away from or close the app. If you leave mid-game, the Hub (or CONTINUE on the title screen) offers **RESUME** with the quarter, clock, score, down and stats intact. The pause menu also has **SAVE & EXIT**. The game fills the whole screen at a crisp integer pixel scale and keeps the HUD clear of the notch.
+**It always autosaves, even if you just close the site.** Reopening the link takes you straight back into your career, or into the game you left mid-play. The game saves after every menu action and every game, before every snap and every opponent drive, every 15 seconds, and whenever you switch away from or close the app. If you leave mid-game, the Hub (or CONTINUE on the title screen) offers **RESUME** with the quarter, clock, score, down and stats intact. The pause menu also has **SAVE & EXIT**. The game fills the whole screen at a crisp integer pixel scale and keeps the HUD clear of the notch.
 
 ## Run it
 
@@ -51,6 +51,9 @@ The play is chosen for you. Before the snap, each receiver's route is drawn as a
 ## What's in it
 
 - **Look:** a chunky outlined 5×7 pixel font, outlined player sprites with helmet stripes and run cycles, crowd stands that bounce on big plays, end zones with team names, a midfield logo, a scoreboard HUD, a TOUCHDOWN banner with confetti, screen shake, dust, floating yardage, and weather (snow late in the season at cold-weather stadiums, rain) and night games.
+- **Fantasy draft start:** on New Career, set STAR ROSTER to DRAFT THEM to pick your stars round by round (10 rounds, real ratings and skills) before season 1, or choose RANDOM to be handed a squad.
+- **Stamina:** ball carriers run at full speed for a couple of seconds (longer with high STAMINA), then fade, so defenders can run them down. Jukes cost stamina. A stamina bar shows for the ball carrier, and every carry wears a player's condition down over the game.
+- **Interceptions:** contested and badly placed throws can be picked off. The defender returns it live while your players chase him, and a pick-six is possible.
 - **Skills:** every star has a signature skill (CANNON, SNIPER, BURNER, SURE HANDS, BULLDOZER, BALL HAWK, BIG LEG…) that boosts one attribute, shown on the player card. Non-star depth players are real named individuals with their own ratings.
 - **Arm strength matters:** a weak-armed QB tops out around 35 yards while an elite arm reaches about 70 (CANNON adds more). A stronger arm also gets the ball there faster.
 - **Injuries:** stars can get hurt during a game on tackles, sacks and defensive drives. A banner announces it, a backup takes over, and the player misses real weeks (Rehab shortens it).

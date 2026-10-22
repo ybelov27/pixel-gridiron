@@ -124,7 +124,25 @@ export function signFA(c, p) {
 
 // ---------- draft ----------
 const ROUND_Q = [[1.5, 3, 3, 5], [1, 2.5, 2.5, 4.5], [0.5, 2, 2, 4]];
+// fantasy draft at the start of a career: established players with known ratings
+export function genInitialRound(c) {
+  const rng = rngOf(c);
+  const r = c.draft.round;
+  const have = new Set(c.roster.map((p) => p.pos));
+  const pool = [];
+  const wantQB = !have.has('QB');
+  for (let i = 0; i < 8; i++) {
+    const pos = i === 0 && wantQB ? 'QB' : rng.pick(['QB', 'RB', 'WR', 'WR', 'TE', 'OL', 'OL', 'K', 'DL', 'DL', 'LB', 'LB', 'DB', 'DB']);
+    const st = clamp(Math.round(rng.range(1.5, 3.6 - r * 0.08) * 2) / 2, 1.5, 3.5);
+    const p = makePlayer(rng, pos, st, { id: newId(c), age: rng.int(22, 31), years: rng.int(2, 4), morale: 75 });
+    p.scout = { stars: p.stars, potLo: p.pot, potHi: p.pot };
+    pool.push(p);
+  }
+  c.draft.pool = pool.sort((a, b) => b.stars - a.stars);
+  saveRng(c, rng);
+}
 export function genDraftRound(c) {
+  if (c.draft.kind === 'initial') return genInitialRound(c);
   const rng = rngOf(c);
   const [s0, s1, p0, p1] = ROUND_Q[c.draft.round - 1];
   c.draft.pool = [];
@@ -145,13 +163,20 @@ export function draftPick(c, p) {
   if (capRoom(c) < p.salary) return 'NOT ENOUGH CAP ROOM';
   delete p.scout;
   c.roster.push(p);
-  addNews(c, `DRAFTED ${p.pos} ${displayName(p)} IN ROUND ${c.draft.round}.`);
+  addNews(c, `${c.draft.kind === 'initial' ? 'PICKED' : 'DRAFTED'} ${p.pos} ${displayName(p)} IN ROUND ${c.draft.round}.`);
   c.draft.picks.push(p.id);
   nextDraftRound(c);
   return null;
 }
 export function nextDraftRound(c) {
   c.draft.round++;
+  if (c.draft.kind === 'initial') {
+    if (c.draft.round > c.draft.rounds) {
+      c.stage = null; c.draft = null; syncUserTeamRatings(c);
+      addNews(c, `FANTASY DRAFT COMPLETE - ${c.roster.length} STARS SIGNED.`);
+    } else genInitialRound(c);
+    return;
+  }
   if (c.draft.round > 3) { c.stage = 'fa'; c.draft.pool = []; genFreeAgents(c, 10); }
   else genDraftRound(c);
 }

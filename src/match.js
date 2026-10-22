@@ -194,7 +194,7 @@ export class Match {
         this.team.pyds += y;
         if (r.kind === 'td') { this.inc(r.passer, 'ptd'); this.inc(r.receiver, 'rectd'); }
       }
-      if (r.kind === 'int') this.inc(r.passer, 'pint');
+      if (r.kind === 'int' || r.kind === 'pick6') this.inc(r.passer, 'pint');
     } else if (r.carrier && !r.sack) {
       this.inc(r.carrier, 'ratt'); this.inc(r.carrier, 'ryds', y); this.team.ryds += y;
       if (r.kind === 'td') this.inc(r.carrier, 'rtd');
@@ -205,6 +205,8 @@ export class Match {
     this.play.done = false; // consumed
     const wasConv = this.conv;
     if (!wasConv) this.recordPlay(r);
+    if (r.carrier && r.carrier.id && r.carrierKind) r.carrier.condition = Math.max(35, (r.carrier.condition ?? 100) - (2.2 - eff(r.carrier, 'STA') * 0.12));
+    if (r.passer && r.passer.id) r.passer.condition = Math.max(50, (r.passer.condition ?? 100) - 0.35);
     if (r.kind === 'tackle' || r.kind === 'fumble') this.maybeInjure(r.sack ? this.lineup.QB[0] : r.carrier, r.sack ? 0.006 : 0.0035);
     const endYard = r.x - 10;
     if (wasConv) {
@@ -219,6 +221,12 @@ export class Match {
     if (r.kind === 'safety') {
       this.score.o += 2;
       return this.say('SAFETY! +2 ' + this.opp.abbr, () => { if (this.possEnded('u')) return; this.next(() => this.oppDrive(this.rng.int(35, 45))); }, 2);
+    }
+    if (r.kind === 'pick6') {
+      this.score.o += 6; this.sfx.push('groan');
+      if (this.ot) { this.possEnded('o', true); return; }
+      const ok = this.rng.chance(0.95); if (ok) this.score.o += 1;
+      return this.say(`PICK SIX! ${this.opp.abbr} TOUCHDOWN`, () => this.afterScore('o'), 2.2);
     }
     if (r.kind === 'int' || r.kind === 'fumble') {
       let oy = endYard >= 100 ? 20 : clamp(100 - endYard + (r.ret || 0), 1, 99);

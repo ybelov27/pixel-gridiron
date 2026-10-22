@@ -166,7 +166,7 @@ export class PlaySim {
     if (!this.canThrow()) return false;
     this.setCarrier(this.QB, 'qb'); this.events.push('scramble'); return true;
   }
-  juke(dir) { const c = this.carrier; if (!c || c.cd2 > 0 || c.diveT > 0) return; c.jukeT = 0.3; c.jukeDir = dir; c.cd2 = 0.45; this.events.push('juke'); }
+  juke(dir) { const c = this.carrier; if (!c || c.cd2 > 0 || c.diveT > 0) return; c.jukeT = 0.3; c.jukeDir = dir; c.cd2 = 0.45; c.runT = (c.runT || 0) + 0.35; this.events.push('juke'); }
   stutter() { const c = this.carrier; if (!c || c.cd2 > 0 || c.diveT > 0) return; c.slowT = 0.45; c.cd2 = 0.45; }
   dive() { const c = this.carrier; if (!c || c.diveT > 0) return; c.diveT = 0.35; c.diving = true; this.events.push('dive'); }
 
@@ -180,6 +180,7 @@ export class PlaySim {
   // ----- simulation -----
   update(dt) {
     if (this.mode === 'return') return this.updateReturn(dt);
+    if (this.mode === 'intret') return this.updateIntReturn(dt);
     if (!this.started) return;
     if (this.done) return;
     if (this.result) { this.endTimer -= dt; this.settle(dt); this.animate(dt); if (this.endTimer <= 0) this.done = true; return; }
@@ -316,8 +317,15 @@ export class PlaySim {
       if (!this.carrier) this.moveTo(o, Math.max(this.QB.x + 2, o.x - 0.3), o.y, 1, dt);
     }
   }
+  // stamina: full speed for a couple of seconds (longer with STA), then the runner fades
+  staminaOf(c) {
+    const fresh = 1.6 + eff(c.p, 'STA') * 0.22;
+    return clamp(1 - Math.max(0, (c.runT || 0) - fresh) * 0.09 / 0.3, 0, 1);
+  }
   runCarrier(c, dt) {
-    const base = spdOf(eff(c.p, 'SPD'));
+    c.runT = (c.runT || 0) + dt;
+    c.stam = this.staminaOf(c);
+    const base = spdOf(eff(c.p, 'SPD')) * (0.7 + 0.3 * c.stam);
     let vx = base, vy = 0;
     if (c.run && c.route && c.wp < 2) {
       // follow the run path through the line first
@@ -410,11 +418,11 @@ export class PlaySim {
     if (rIn) {
       const pCatch = clamp(0.82 - this.wx + cat * 0.024 - dR * 0.16 - Math.min(0.45, (b.err || 0) * 0.075) - pressure * (0.34 + this.diff.contest) - (b.bullet && b.T < 0.5 ? 0.05 : 0), 0.06, 0.97);
       if (rng.chance(pCatch)) return this.catchBy(R);
-      if (pressure > 0.65 && rng.chance((pressure - 0.65) * 0.35 + cov * 0.004 + this.diff.contest * 0.3)) return this.intercept(Dd);
+      if (pressure > 0.55 && rng.chance((pressure - 0.55) * 0.5 + cov * 0.006 + this.diff.contest * 0.3)) return this.intercept(Dd);
       return this.incomplete(pressure > 0.35 ? 'BROKEN UP!' : 'DROPPED!', true);
     }
     if (dIn) {
-      if (rng.chance(clamp(0.17 + cov * 0.02 + this.diff.contest - dD * 0.12, 0.05, 0.45))) return this.intercept(Dd);
+      if (rng.chance(clamp(0.24 + cov * 0.025 + this.diff.contest - dD * 0.12, 0.08, 0.55))) return this.intercept(Dd);
       return this.incomplete('DEFLECTED!', true);
     }
     return this.incomplete('INCOMPLETE');
@@ -426,9 +434,44 @@ export class PlaySim {
   }
   intercept(d) {
     this.events.push('int');
-    d.vx = -6;
-    const ret = this.rng.int(0, 15);
-    this.end({ kind: 'int', x: this.ball.x1, y: this.ball.y1, ret, msg: 'INTERCEPTED!', stop: true, interceptor: d });
+    // the defender returns it toward our end zone; our players chase him down
+    this.mode = 'intret'; this.returner = d; this.thrown = true; this.carrier = null;
+    this.ball = { state: 'carried', x: d.x, y: d.y, z: 1.2 };
+    d.stun = 0; d.vx = -2; d.runT = 0; this.intT = 0;
+    for (const e of this.ents) if (e.side === 'off') e.chaseAt = this.t + 0.25 + this.rng.range(0, 0.35);
+  }
+  updateIntReturn(dt) {
+    if (this.result) { this.endTimer -= dt; this.settle(dt); this.animate(dt); if (this.endTimer <= 0) this.done = true; return; }
+    this.t += dt; this.intT += dt;
+    const r = this.returner;
+    const sp = spdOf(eff(r.p, 'SPD')) * 0.95;
+    let vy = 0;
+    for (const e of this.ents) {
+      if (e.side !== 'off') continue;
+      const dx = r.x - e.x, dy = e.y - r.y, dd = Math.hypot(dx, dy);
+      if (dx > -1 && dx < 6 && dd < 6) vy -= Math.sign(dy || 1) * sp * 0.25 * (1 - dd / 6); // cut away from tacklers ahead
+    }
+    if (r.y < 2.5) vy += 1.5; if (r.y > FW - 2.5) vy -= 1.5;
+    r.vx += (-sp - r.vx) * Math.min(1, dt * 5); r.vy += (vy - r.vy) * Math.min(1, dt * 6);
+    r.x += r.vx * dt; r.y += r.vy * dt;
+    this.ball.x = r.x - 0.3; this.ball.y = r.y;
+    for (const e of this.ents) {
+      if (e === r) continue;
+      if (e.side === 'off') { if (this.t >= (e.chaseAt || 0)) this.pursue(e, r, dt, e.role === 'OL' ? 0.85 : 1); }
+      else this.moveTo(e, e.x - 2, e.y, 3, dt); // blockers escort loosely
+      if (e.cd > 0) e.cd -= dt;
+    }
+    const spot = (kind, msg) => this.end({ kind, x: r.x, y: clamp(r.y, 0, FW), msg, stop: true, interceptor: r, pick6: kind === 'pick6' });
+    if (r.x <= 10) return spot('pick6', 'PICK SIX!');
+    if (r.y <= 0 || r.y >= FW) return spot('int', 'INTERCEPTED! (OUT)');
+    for (const e of this.ents) {
+      if (e.side !== 'off' || e.cd > 0 || Math.hypot(e.x - r.x, e.y - r.y) > 0.9) continue;
+      if (this.rng.chance(e.role === 'OL' ? 0.35 : 0.25)) { e.cd = 1; e.stun = 0.5; this.events.push('miss'); continue; }
+      r.down = true; this.tackler = e; e.lunge = true;
+      return spot('int', 'INTERCEPTED!');
+    }
+    this.animate(dt);
+    if (this.intT > 12) spot('int', 'INTERCEPTED!');
   }
   incomplete(msg, deflect = false) {
     const b = this.ball;
@@ -438,7 +481,7 @@ export class PlaySim {
   }
   end(r) {
     if (this.result) return;
-    r.yards = r.kind === 'incomplete' || r.kind === 'int' ? 0 : r.x - this.los;
+    r.yards = r.kind === 'incomplete' || r.kind === 'int' || r.kind === 'pick6' ? 0 : r.x - this.los;
     r.carrierKind = this.carrierKind; r.carrier = this.carrier?.p || (r.sack ? this.QB.p : null);
     r.passer = this.passer || null; r.receiver = this.receiver || null; r.thrown = this.thrown; r.time = this.t;
     if (r.kind === 'td' || r.kind === 'safety') r.stop = true;
@@ -448,7 +491,7 @@ export class PlaySim {
   }
   // after the whistle: tacklers finish their lunge, everyone else coasts to a stop
   settle(dt) {
-    const tk = this.tackler, c = this.carrier || this.QB;
+    const tk = this.tackler, c = this.returner || this.carrier || this.QB;
     if (tk && c && tk.lunge) {
       const d = dist(tk, c);
       if (d > 0.45) { tk.x += (c.x - tk.x) * Math.min(1, dt * 10); tk.y += (c.y - tk.y) * Math.min(1, dt * 10); }

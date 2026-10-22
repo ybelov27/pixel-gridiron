@@ -77,8 +77,9 @@ export function newCareer(o) {
   }));
   if (o.random) c.userTeamId = rng.int(0, 31);
   const ut = c.teams[c.userTeamId];
-  c.roster = genRoster(c, rng, 2.5);
+  c.roster = o.draftStart ? [] : genRoster(c, rng, 2.5);
   c.regulars = genRegulars(rng);
+  if (o.draftStart) { c.stage = 'draft'; c.draft = { kind: 'initial', round: 1, rounds: 10, pool: [], picks: [] }; }
   c.coach.teams.push(ut.abbr);
   c.schedule = genSchedule(rng);
   saveRng(c, rng);

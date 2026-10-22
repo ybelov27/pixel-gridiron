@@ -6,7 +6,9 @@ import { UI } from './ui.js';
 import { unlockAudio, sfx, audio } from './audio.js';
 import { app } from './app.js';
 import { saveCareer } from './save.js';
-import { TitleScene } from './scenes/menus.js';
+import { TitleScene, HubScene, launchGame } from './scenes/menus.js';
+import { loadCareer } from './save.js';
+import { resumableGame } from './flow.js';
 
 const STEP = 1 / 60;
 initCanvas(document.getElementById('c'));
@@ -154,5 +156,13 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 }
 // debug hook (used by the in-browser smoke test): advance the fixed-step loop synchronously
 window.__pg = { app, input, UI, G, tick(sec = 1) { for (let i = 0; i < sec * 60; i++) { step(); if (i % 6 === 0) render(); } render(); } };
-app.go(new TitleScene());
+// reopening the site drops you straight back into your career - or the game you left mid-play
+(function boot() {
+  const c = !location.search.includes('title') && loadCareer();
+  if (!c) return app.go(new TitleScene());
+  app.career = c;
+  const r = resumableGame(c);
+  if (r) launchGame(c, r.g, r.snap); else app.go(new HubScene());
+  app.toast('WELCOME BACK - CAREER LOADED');
+})();
 requestAnimationFrame(frame);

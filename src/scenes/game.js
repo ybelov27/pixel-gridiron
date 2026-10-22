@@ -49,6 +49,7 @@ export class GameScene {
     else if (m.phase === 'opp') target = 10 + (100 - m.oppMarker());
     else if (p && (m.phase === 'live' || m.phase === 'msg')) {
       if (p.ball.state === 'air' || p.ball.state === 'kick') target = p.ball.x + (p.mode === 'return' ? 6 : 4);
+      else if (p.mode === 'intret' && p.returner) target = p.returner.x - 10;
       else if (p.carrier) target = p.carrier.x + 9;
       else if (p.mode === 'return') target = p.KR.x + 12;
       else if (this.g && this.g.kind === 'aim') target = p.QB.x + 24;
@@ -427,7 +428,8 @@ export class GameScene {
         const qx = this.sx(p.QB.x) + 3, qy = this.sy(p.QB.y) - (this.g ? 12 : 8);
         const cx2 = this.sx(ctr.x) + 2, cy2 = this.sy(ctr.y) - 3;
         ballSprite(cx2 + (qx - cx2) * u, cy2 + (qy - cy2) * u - Math.sin(u * Math.PI) * 4, u < 1 ? spin : 0);
-      } else if (b.state === 'carried' && !p.carrier && p.KR) ballSprite(this.sx(p.KR.x) + 3, this.sy(p.KR.y) - 6, 0);
+      } else if (p.mode === 'intret' && p.returner && !(p.returner.down && p.result)) ballSprite(this.sx(p.returner.x) - 3, this.sy(p.returner.y) - 6, 0);
+      else if (b.state === 'carried' && !p.carrier && p.KR) ballSprite(this.sx(p.KR.x) + 3, this.sy(p.KR.y) - 6, 0);
     }
   }
   drawWeather() {
@@ -527,11 +529,20 @@ export class GameScene {
       else if (p.canThrow()) tip = 'DRAG BACK + RELEASE = THROW  -  2ND FINGER / RIGHT CLICK = BULLET  -  DRAG FORWARD = RUN';
     } else if (m.phase === 'opp') tip = 'YOUR DEFENSE IS ON THE FIELD  -  TAP TO FAST FORWARD';
     const c = p && p.carrier && m.phase === 'live' ? p.carrier : null;
-    if (c && !c.p.regular) {
-      starIcon(6 + G.SAFE.l, y + 3, '#ffd23f');
-      big(`${c.p.pos} ${displayName(c.p)}`, 14 + G.SAFE.l, y + 3, '#fff', { shadow: false });
-      const g = Math.round(c.x - p.los);
-      big(`${g >= 0 ? '+' : ''}${g} YDS`, W - 6 - G.SAFE.r, y + 3, g >= 10 ? '#ffd23f' : '#fff', { align: 'right', shadow: false });
+    if (p && p.mode === 'intret' && m.phase === 'live') {
+      big('INTERCEPTED! RUN HIM DOWN...', W / 2, y + 3, '#ff4d5e', { align: 'center', shadow: false });
+    } else if (c) {
+      let x = 6 + G.SAFE.l;
+      if (!c.p.regular) { starIcon(x, y + 3, '#ffd23f'); x += 8; }
+      const nm = `${c.p.pos} ${displayName(c.p)}`;
+      big(nm, x, y + 3, '#fff', { shadow: false });
+      // stamina: drains while sprinting and juking; a tired runner gets caught
+      const st = c.stam ?? 1, sx2 = x + bigWidth(nm) + 8;
+      text('STAMINA', sx2, y + 4, '#9aa3cf');
+      rect(sx2 + 30, y + 3, 52, 7, '#0b0d1c'); rect(sx2 + 31, y + 4, 50, 5, '#1b2045');
+      rect(sx2 + 31, y + 4, Math.round(50 * st), 5, st > 0.6 ? '#3ccf6a' : st > 0.3 ? '#ffa300' : (Math.floor(this.t * 6) % 2 ? '#ff4d5e' : '#b81d2e'));
+      const gy = Math.round(c.x - p.los);
+      big(`${gy >= 0 ? '+' : ''}${gy} YDS`, W - 6 - G.SAFE.r, y + 3, gy >= 10 ? '#ffd23f' : '#fff', { align: 'right', shadow: false });
     } else text(tip, W / 2, y + 4, '#9aa3cf', 1, 'center');
   }
   banner(s) {

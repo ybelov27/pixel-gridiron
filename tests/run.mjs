@@ -214,6 +214,19 @@ test('arm strength decides who can throw deep, and adds zip', () => {
   assert.ok(maxThrow(10) >= 70, 'elite arms go deep');
   assert.ok(flightOf(40, false, 10).T < flightOf(40, false, 2).T);
 });
+test('fantasy draft: pick your stars before season 1, then play a season', () => {
+  const c = newCareer({ seed: 88, teamId: 12, draftStart: true });
+  assert.equal(c.roster.length, 0); assert.equal(status(c), 'off:draft');
+  O.genDraftRound(c);
+  assert.equal(c.draft.pool.length, 8);
+  assert.ok(c.draft.pool.some((p) => p.pos === 'QB'), 'a QB is offered while you have none');
+  while (c.stage === 'draft') { const p = c.draft.pool.find((x) => x.salary <= O.capRoom(c)); if (p) O.draftPick(c, p); else O.nextDraftRound(c); }
+  assert.equal(c.roster.length, 10); assert.equal(status(c), 'start');
+  assert.ok(c.roster.every((p) => p.trait), 'drafted stars come with skills');
+  const r = runCareer(c, 1, false);
+  assert.equal(c.year, 2);
+  console.log(`      drafted ${c.history[0].team} went ${c.history[0].w}-${c.history[0].l}-${c.history[0].t}`);
+});
 test('deserialize rejects garbage', () => {
   assert.throws(() => deserialize('{"hello":1}'));
   assert.throws(() => deserialize('not json'));

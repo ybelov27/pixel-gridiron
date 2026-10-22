@@ -235,23 +235,25 @@ export function icon(name, x, y, color = '#fff') {
 // ---------- player sprites: fill art auto-outlined -> 10x16 ----------
 // h helmet, s helmet stripe, l logo, m facemask, f face, j jersey, n number band, a arm, p pants, k socks, b shoes
 // compact 6x10 fill art -> 8x12 with the auto outline
-const HEAD = ['.ssss.', 'hhhlhm', 'hhhhfm', '.hhff.'];
+// h helmet, H helmet shine, s stripe, m facemask, f face, j jersey, J jersey shade, w number, a arm, p pants, P pants stripe, k sock, b cleat
+const HEAD = ['.Hsh..', 'Hhshhm', 'hhhhfm', '.hhff.'];
 const TORSO = {
-  n: ['jjnnjj', 'ajnnja', '.jjjj.'],   // arms at sides
-  a: ['jjnnja', 'ajnnj.', '.jjjj.'],   // arm swing
-  c: ['ajnnjj', '.jnnja', '.jjjj.'],   // opposite swing
-  t: ['jjnnja', '.jnnj.', '.jjjj.'],   // throwing (rear arm raised, see THROW_HEAD)
-  u: ['.jnnj.', '.jnnj.', '.jjjj.'],   // arms up (catch / celebrate)
+  n: ['jjwwjj', 'ajwwJa', '.jjJJ.'],   // arms at sides
+  a: ['jjwwja', 'ajwwJ.', '.jjJJ.'],   // arm swing
+  c: ['ajwwjj', '.jwwJa', '.jjJJ.'],   // opposite swing
+  t: ['jjwwja', '.jwwJ.', '.jjJJ.'],   // throwing (rear arm raised, see THROW_HEAD)
+  u: ['.jwwj.', '.jwwJ.', '.jjJJ.'],   // arms up (catch / celebrate)
 };
-const THROW_HEAD = ['.ssss.', 'ahhlhm', 'ahhhfm', '.hhff.'];
-const UP_HEAD = ['a....a', 'assssa', 'hhhlhm', 'hhhhfm', '.hhff.'];
+const THROW_HEAD = ['.Hsh..', 'ahshhm', 'ahhhfm', '.hhff.'];
+const UP_HEAD = ['a....a', 'aHshha', 'hhshhm', 'hhhhfm', '.hhff.'];
 const LEGS = [
-  ['.pppp.', '.k..k.', '.b..bb'], // stand
-  ['pp..pp', 'k....k', 'b....b'], // stride
-  ['.pppp.', '..kk..', '..bbb.'], // feet together
-  ['pp..pp', 'k....k', 'bb...b'], // stride 2
+  ['.pPPp.', '.k..k.', '.b..bb'], // stand
+  ['pP..Pp', 'k....k', 'b....b'], // stride
+  ['.pPPp.', '..kk..', '..bbb.'], // feet together
+  ['pP..Pp', 'k....k', 'bb...b'], // stride 2
 ];
-const DOWN = ['ss.........', 'hhhjjjjppkb', 'hfmjnnjppkb', '.f.aa......'];
+const DOWN = ['Hs.........', 'hhhjjwjpPkb', 'hfmjJwjpPkb', '.f.aa......'];
+const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); };
 const OUTLINE = '#10101a';
 const SKINS = ['#f2c39b', '#c98c5a', '#8d5a35', '#5c3a21'];
 const spriteCache = new Map();
@@ -271,7 +273,9 @@ export function playerSprite(primary, secondary, frameI, facing, skin = 0, pants
   const key = primary + secondary + frameI + facing + skin + pants;
   let c = spriteCache.get(key);
   if (c) return c;
-  const map = { h: primary, s: secondary, l: secondary, m: '#d8d8d8', f: SKINS[skin % 4], j: primary, n: secondary, a: SKINS[skin % 4], p: pants, k: secondary, b: '#1c1c24' };
+  const numCol = Math.abs(lum(secondary) - lum(primary)) > 70 ? secondary : (lum(primary) < 140 ? '#f4f4f4' : '#1c1c24');
+  const map = { h: primary, H: shadeColor(primary, 1.45), s: secondary, l: secondary, m: '#d8d8d8', f: SKINS[skin % 4], j: primary, J: shadeColor(primary, 0.72),
+    w: numCol, n: secondary, a: SKINS[skin % 4], p: pants, P: secondary, k: secondary, b: '#1c1c24' };
   if (frameI === 5) c = buildSprite(DOWN, map, facing);
   else if (frameI === 7) c = buildSprite(DOWN, map, -facing); // horizontal, helmet leading
   else {

@@ -86,4 +86,16 @@ test('weather, night, field-goal and side-view PAT draw', () => {
     m.startKick('pat', 33); for (let i = 0; i < 200 && m.phase === 'kick'; i++) { if (i === 30 || i === 70) m.kick.tap(); sc.update(1 / 60); sc.draw(); }
   }
 });
+test('interception return draws until the tackle or pick six', () => {
+  const c = newCareer({ seed: 31, teamId: 6 }); app.career = c; startSeason(c);
+  const m = new Match(c, userGameThisWeek(c));
+  const sc = new GameScene(m, () => {});
+  let n = 0; while (m.phase !== 'presnap' && n++ < 4000) { if (m.phase === 'live' && m.play.mode === 'return' && !m.play.decided) m.play.returnBall(); sc.update(1 / 60); }
+  m.snap(); for (let i = 0; i < 60; i++) sc.update(1 / 60);
+  const p = m.play; p.thrown = true; p.intercept(p.CB[0]);
+  assert.equal(p.mode, 'intret');
+  for (let i = 0; i < 60 * 15 && m.phase === 'live'; i++) { sc.update(1 / 60); if (i % 3 === 0) sc.draw(); }
+  assert.notEqual(m.phase, 'live');
+  for (let i = 0; i < 300 && m.phase === 'msg'; i++) { sc.update(1 / 60); sc.draw(); }
+});
 console.log(`\n${passed} render tests passed${process.exitCode ? ' - SOME FAILED' : ''}`);
