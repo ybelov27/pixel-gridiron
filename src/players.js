@@ -26,6 +26,8 @@ export const TRAITS = {
   LB: [['HIT MAN', 'TKL', 'SURE TACKLER'], ['SIDELINE', 'SPD', 'COVERS GROUND FAST'], ['COVER LB', 'COV', 'SHADOWS TIGHT ENDS']],
   DB: [['BALL HAWK', 'COV', 'MORE INTERCEPTIONS'], ['SHUTDOWN', 'SPD', 'STAYS WITH FAST RECEIVERS'], ['ENFORCER', 'TKL', 'BIG HITTER']],
 };
+// touchdown celebrations: every player has his own
+export const CELEBS = ['SPIKE', 'DANCE', 'BACKFLIP', 'LEAP', 'FLEX', 'MOONWALK', 'HELICOPTER', 'FIREWORKS'];
 export function traitInfo(p) { return p.trait && TRAITS[p.pos] ? TRAITS[p.pos].find((t) => t[0] === p.trait) : null; }
 
 export function starsOf(p) {
@@ -71,13 +73,14 @@ export function makePlayer(rng, pos, stars, o = {}) {
   if (p.pot < p.stars) p.pot = p.stars;
   p.salary = o.salary ?? salaryFor(p.stars, age);
   p.trait = rng.pick(TRAITS[pos])[0];
+  p.celeb = rng.pick(CELEBS);
   return p;
 }
 // a club's non-star depth players: real names, their own (modest) ratings
 export function makeRegularPlayer(rng, pos, i) {
   const attrs = {};
   ATTRS[pos].forEach((k) => attrs[k] = clamp(Math.round(3 + rng.gauss() * 0.8), 2, 4));
-  const p = { id: null, rid: `${pos}${i}`, regular: true, first: rng.pick(FIRST), last: rng.pick(LAST), pos, attrs, condition: 100, morale: 70, skin: rng.int(0, 3), age: rng.int(22, 31) };
+  const p = { id: null, rid: `${pos}${i}`, regular: true, first: rng.pick(FIRST), last: rng.pick(LAST), pos, attrs, condition: 100, morale: 70, skin: rng.int(0, 3), age: rng.int(22, 31), celeb: rng.pick(CELEBS) };
   p.stars = starsOf(p);
   return p;
 }

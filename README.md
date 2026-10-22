@@ -51,6 +51,8 @@ The play is chosen for you. Before the snap, each receiver's route is drawn as a
 ## What's in it
 
 - **Look:** a chunky outlined 5×7 pixel font, outlined player sprites with helmet stripes and run cycles, crowd stands that bounce on big plays, end zones with team names, a midfield logo, a scoreboard HUD, a TOUCHDOWN banner with confetti, screen shake, dust, floating yardage, and weather (snow late in the season at cold-weather stadiums, rain) and night games.
+- **Touchdown celebrations:** every player has his own: SPIKE, DANCE, BACKFLIP, LEAP, FLEX, MOONWALK, HELICOPTER or FIREWORKS. It plays when he scores, and you can change a star's celebration on his player card.
+- **Sharper image:** the canvas renders at the screen's full resolution, and all pixel art (players, helmets, ball, both fonts) is smoothed with Scale2x/EPX, so edges are cleaner and rounder while it still looks retro. Between plays, players walk from where they finished to their new spots instead of popping in.
 - **Achievements:** 33 trophies (big plays, games, seasons and career milestones), each paying coaching credits. Big-play ones unlock live mid-game with a gold banner. See them under HISTORY → TROPHIES.
 - **Physics:** players have momentum (they accelerate and need time to cut; linemen are heavy, skill players quick), bodies collide instead of passing through each other, and defenders get slowed in traffic. Runners tackled at speed fall forward for extra yards, and stretching across the goal line scores. Loose balls bounce oddly and roll to a stop. The camera leads the ball carrier and looks ahead to where passes will land.
 - **Difficulty pays:** coaching credits and XP scale with difficulty: Easy ×0.75 / ×0.9, Medium ×1, Hard ×1.5 / ×1.15, Extreme ×2 / ×1.3.

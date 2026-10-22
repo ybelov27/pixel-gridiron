@@ -137,7 +137,7 @@ function render() {
   if (app.fadeT > 0) rect(0, 0, W, H, `rgba(11,13,28,${Math.min(1, app.fadeT / 0.2)})`);
   if (app.savedT > 0 && !(sc && sc.full)) { // small "saved" tick in the corner of menu screens
     const x = W - 40 - G.SAFE.r, y = H - 11 - G.SAFE.b;
-    rect(x, y, 36, 9, 'rgba(11,13,28,0.85)'); text('SAVED', x + 20, y + 2, `rgba(60,207,106,${Math.min(1, app.savedT * 2)})`, 1, 'center');
+    rect(x, y, 36, 9, 'rgba(11,13,28,0.85)'); text('SAVED', x + 20, y + 2, '#3ccf6a', 1, 'center'); // fixed colour: each distinct text colour builds (and caches) a smoothed font sheet
     rect(x + 3, y + 4, 1, 1, '#3ccf6a'); rect(x + 4, y + 5, 1, 1, '#3ccf6a'); rect(x + 5, y + 4, 1, 1, '#3ccf6a'); rect(x + 6, y + 3, 1, 1, '#3ccf6a');
   }
   if (app.modal) { UI.begin(); drawModal(); }

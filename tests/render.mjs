@@ -99,4 +99,17 @@ test('interception return draws until the tackle or pick six', () => {
   assert.notEqual(m.phase, 'live');
   for (let i = 0; i < 300 && m.phase === 'msg'; i++) { sc.update(1 / 60); sc.draw(); }
 });
+test('every touchdown celebration draws', () => {
+  const { CELEBS } = { CELEBS: ['SPIKE', 'DANCE', 'BACKFLIP', 'LEAP', 'FLEX', 'MOONWALK', 'HELICOPTER', 'FIREWORKS'] };
+  for (const type of CELEBS) {
+    const c = newCareer({ seed: 41, teamId: 3 }); app.career = c; startSeason(c);
+    const m = new Match(c, userGameThisWeek(c)); const sc = new GameScene(m, () => {});
+    let n = 0; while (m.phase !== 'presnap' && n++ < 4000) { if (m.phase === 'live' && m.play.mode === 'return' && !m.play.decided) m.play.returnBall(); sc.update(1 / 60); }
+    m.snap(); for (let i = 0; i < 30; i++) sc.update(1 / 60);
+    const p = m.play, r = p.WR[0]; p.thrown = true; p.setCarrier(r, 'rec'); r.p.celeb = type; r.x = 111;
+    p.end({ kind: 'td', x: 111, y: r.y, msg: 'TOUCHDOWN!' });
+    for (let i = 0; i < 150; i++) { sc.update(1 / 60); sc.draw(); }
+    assert.equal(sc.celeb && sc.celeb.type, type);
+  }
+});
 console.log(`\n${passed} render tests passed${process.exitCode ? ' - SOME FAILED' : ''}`);

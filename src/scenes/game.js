@@ -79,8 +79,28 @@ export class GameScene {
       }
     }
     // a new formation jogs up to the line instead of popping in
-    if (p !== this.lastPlay) { this.lastPlay = p; this.formT = p && !p.started && p.mode !== 'return' ? 0.55 : 0; }
+    if (p !== this.lastPlay) {
+      const prev = this.lastPlay;
+      this.lastPlay = p; this.formT = p && !p.started && p.mode !== 'return' ? 0.7 : 0;
+      this.celeb = null;
+      // same roster order play to play: start each player where he finished the previous snap (no popping in)
+      const same = prev && p && prev.ents && p.ents && prev.ents.length === p.ents.length && !prev.mode && !p.mode;
+      if (p && p.ents) p.ents.forEach((e, i) => { if (same) { const q = prev.ents[i]; e.fromX = q.x; e.fromY = q.y; } else { e.fromX = undefined; } });
+    }
     if (this.formT > 0) this.formT -= dt;
+    // touchdown celebration for whoever scored
+    if (p && p.result && p.result.kind === 'td' && !this.celeb) {
+      const s = p.carrier || p.KR;
+      if (s && s.side === 'off') {
+        const type = s.p.celeb || 'SPIKE';
+        this.celeb = { e: s, type, t: 0 };
+        this.floats.push({ x: s.x, y: s.y - 2, s: `${type}!`, c: '#ffd23f', life: 1.8 });
+      }
+    }
+    if (this.celeb) {
+      this.celeb.t += dt;
+      if (this.celeb.type === 'FIREWORKS' && Math.floor(this.celeb.t / 0.35) !== Math.floor((this.celeb.t - dt) / 0.35)) this.burst(this.celeb.e);
+    }
     // dust kicked up by a fast ball carrier
     this.dustT -= dt;
     const car = p && p.carrier && !p.result ? p.carrier : null;
@@ -104,6 +124,11 @@ export class GameScene {
   confetti() {
     const cols = [this.m.me.c1, this.m.me.c2, '#ffd23f', '#fff'];
     for (let i = 0; i < 120; i++) this.parts.push({ sx: true, x: Math.random() * G.W, y: -10 - Math.random() * 60, vx: (Math.random() - 0.5) * 40, vy: 20 + Math.random() * 50, g: 25, c: cols[i % 4], life: 3 + Math.random() });
+  }
+  burst(e) {
+    const cols = [this.m.me.c1, this.m.me.c2, '#ffd23f', '#ff4d5e', '#29adff'];
+    const bx = (Math.random() - 0.5) * 20, by = -24 - Math.random() * 10;
+    for (let i = 0; i < 18; i++) { const a = i / 18 * 6.283; this.parts.push({ wx: e.x, wy: e.y, x: bx, y: by, vx: Math.cos(a) * 26, vy: Math.sin(a) * 26, g: 20, c: cols[i % cols.length], life: 0.7 }); }
   }
   dust(small = false) {
     const p = this.m.play; const c = p && (p.carrier || p.QB); if (!c) return;
@@ -326,7 +351,7 @@ export class GameScene {
   home() { return this.m.userHome ? this.m.me : this.m.opp; }
   drawPlay(p) {
     const m = this.m;
-    const jog = !p.started && this.formT > 0 ? Math.pow(this.formT / 0.55, 2) : 0;
+    const jog = !p.started && this.formT > 0 ? Math.pow(this.formT / 0.7, 2) : 0;
     // routes before the snap: dotted path, chevrons showing direction, arrowhead (or stop bar) at the end
     if (!p.started && p.receivers && jog < 0.05) {
       for (const r of p.receivers) {
@@ -386,12 +411,15 @@ export class GameScene {
     for (const e of ents) {
       const off = e.side === 'off';
       const T = off ? m.me : m.opp;
-      const x = this.sx(e.x + (off ? -7 : 7) * jog + (e.y - FW / 2) * jog * 0.15);
-      let y = this.sy(e.y - (e.y - FW / 2) * jog * 0.25);
+      let wx = e.x + (off ? -7 : 7) * jog + (e.y - FW / 2) * jog * 0.15, wy = e.y - (e.y - FW / 2) * jog * 0.25;
+      if (jog > 0 && e.fromX !== undefined) { wx = e.x + (e.fromX - e.x) * jog; wy = e.y + (e.fromY - e.y) * jog; }
+      const x = this.sx(wx);
+      let y = this.sy(wy);
       if (x < -16 || x > G.W + 16) continue;
       const pants = off ? '#e9e9e9' : shadeColor(T.c2 === '#111111' ? '#555555' : T.c2, 0.75);
       const face = off ? 1 : -1;
-      const down = (e.down && p.result) || (e.stun > 0.3 && !e.held);
+      const down = (e.down && p.result) || (e.stun > 0.22 && !e.held);
+      const rising = !down && e.stun > 0.05 && !e.held;
       const sp = Math.hypot(e.vx, e.vy);
       // pick a pose
       let fr = down ? 5 : sp > 0.6 || jog > 0.03 ? [1, 2, 3, 2][Math.floor((e.anim + this.t * 6) * 1.4) % 4] : 0;
@@ -403,6 +431,7 @@ export class GameScene {
         if (e.lunge && p.result) { fr = 7; lift = 2; }                       // tackler lunging
         if (td && off && (e === p.carrier || Math.abs(e.x - (p.carrier || e).x) < 12)) { fr = 6; lift = Math.round(Math.abs(Math.sin(this.t * 9 + e.y)) * 5); }
         if (!p.started && off && fr === 0) lift = Math.floor(this.t * 2 + e.y) % 2; // pre-snap bounce
+        if (rising) { fr = 7; lift = 1; }                                     // getting back up
       }
       // shadow shrinks as the player leaves the ground
       rect(x - 3 + Math.min(2, lift >> 1), y - 1, 7 - Math.min(4, lift), 2, 'rgba(0,0,0,0.3)');
@@ -413,6 +442,7 @@ export class GameScene {
         for (const back of [10, 20]) { const tx = this.sx(e.trail[n - back - 2]), ty = this.sy(e.trail[n - back - 1]); const gi = playerSprite(T.c1, T.c2, fr, face, e.p.skin || 0, pants); drawSprite(gi, tx - 4, ty - gi.height + 1); }
         ctx.globalAlpha = 1;
       }
+      if (this.celeb && this.celeb.e === e && p.result) { this.drawCeleb(e, x, y, T, pants, face); continue; }
       const img = playerSprite(T.c1, T.c2, fr, face, e.p.skin || 0, pants);
       y -= lift;
       if (fr === 5 || fr === 7) drawSprite(img, x - 6, y - 6); else drawSprite(img, x - 4, y - img.height + 1);
@@ -446,7 +476,8 @@ export class GameScene {
       if (b.state === 'air') { const tx = this.sx(b.x1), ty = this.sy(b.y1), rr = 3 + (1 - Math.min(1, left)) * 2; for (let a = 0; a < 14; a++) px(tx + Math.cos(a / 14 * 6.283 + this.t * 3) * rr * 1.3, ty + Math.sin(a / 14 * 6.283 + this.t * 3) * rr * 0.75, 'rgba(255,236,39,0.85)'); }
     } else {
       this.ballTrail.length = 0;
-      if (b.state === 'carried' && p.carrier && !(p.carrier.down && p.result)) ballSprite(this.sx(p.carrier.x) + 3, this.sy(p.carrier.y) - 6, 0);
+      if (this.celeb && p.result) { /* the celebration draws the ball */ }
+      else if (b.state === 'carried' && p.carrier && !(p.carrier.down && p.result)) ballSprite(this.sx(p.carrier.x) + 3, this.sy(p.carrier.y) - 6, 0);
       else if (b.state === 'held' && p.QB && p.mode !== 'return') {
         // snap: the ball travels from the center to the QB
         const u = p.started ? Math.min(1, p.t / 0.22) : 0, ctr = p.OL ? p.OL[2] : p.QB;
@@ -456,6 +487,41 @@ export class GameScene {
       } else if (p.mode === 'intret' && p.returner && !(p.returner.down && p.result)) ballSprite(this.sx(p.returner.x) - 3, this.sy(p.returner.y) - 6, 0);
       else if (b.state === 'carried' && !p.carrier && p.KR) ballSprite(this.sx(p.KR.x) + 3, this.sy(p.KR.y) - 6, 0);
     }
+  }
+  // each player's own touchdown celebration (sprite poses + ball + effects)
+  drawCeleb(e, x, y, T, pants, face) {
+    const t = this.celeb.t, type = this.celeb.type, skin = e.p.skin || 0;
+    const spr = (fr, f = face) => playerSprite(T.c1, T.c2, fr, f, skin, pants);
+    const shadow = (w = 7) => rect(x - (w >> 1), y - 1, w, 2, 'rgba(0,0,0,0.3)');
+    const put = (img, dx = 0, lift = 0) => drawSprite(img, x - 4 + dx, y - img.height + 1 - lift);
+    const spin = Math.floor(this.t * 14) % 3;
+    switch (type) {
+      case 'SPIKE': {
+        shadow(); put(spr(t < 0.3 ? 6 : 0));
+        if (t < 0.3) ballSprite(x + 1, y - 17, 0);
+        else { const u = t - 0.3; ballSprite(x + 5 + u * 8, y - 2 - Math.abs(Math.sin(u * 9)) * 12 * Math.exp(-u * 2.2), spin); }
+        break;
+      }
+      case 'DANCE': { shadow(); put(spr([1, 3][Math.floor(t * 8) % 2], Math.floor(t * 4) % 2 ? face : -face), 0, Math.floor(t * 8) % 2); break; }
+      case 'BACKFLIP': {
+        const cyc = t % 1.2, u = Math.min(1, cyc / 0.8), h = Math.sin(u * Math.PI) * 16;
+        shadow(Math.max(3, 7 - Math.round(h / 4)));
+        const img = spr(cyc < 0.8 ? 6 : 0), ctx = G.ctx;
+        ctx.save(); ctx.translate(x, y - 6 - h); ctx.rotate(-face * u * Math.PI * 2 * (cyc < 0.8 ? 1 : 0));
+        ctx.drawImage(G.hi(img), -4, -img.height / 2 - 1, img.width, img.height); ctx.restore();
+        break;
+      }
+      case 'LEAP': { const u = Math.min(1, t / 0.5), h = Math.round(Math.sin(u * Math.PI / 2) * 22); shadow(Math.max(3, 7 - (h >> 2))); put(spr(u < 1 ? 1 : 6), Math.round(u * 6) * face, h + (u >= 1 ? Math.floor(t * 6) % 2 : 0)); break; }
+      case 'FLEX': {
+        shadow(); put(spr(Math.floor(t * 4) % 2 ? 6 : 0));
+        for (let i = 0; i < 4; i++) { const a = t * 5 + i * 1.57; px(x + Math.cos(a) * 8, y - 8 + Math.sin(a) * 6, '#ffd23f'); }
+        break;
+      }
+      case 'MOONWALK': { const dx = -Math.min(28, t * 12) * face; shadow(); put(spr([3, 2, 1, 2][Math.floor(t * 8) % 4]), dx); ballSprite(x + dx + 3, y - 6, 0); break; }
+      case 'HELICOPTER': { shadow(); put(spr(6, Math.floor(t * 14) % 2 ? 1 : -1)); ballSprite(x + Math.cos(t * 14) * 7, y - 18 + Math.sin(t * 14) * 2, spin); break; }
+      default: { shadow(); put(spr(6), 0, Math.floor(t * 3) % 2); } // FIREWORKS: arms up while the sky lights up
+    }
+    if (e.star) starIcon(x - 2, y - 24, '#ffd23f');
   }
   drawWeather() {
     const w = this.m.weather; if (w === 'clear') return;

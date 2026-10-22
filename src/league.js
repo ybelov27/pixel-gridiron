@@ -1,7 +1,7 @@
 // League structure: career creation, schedule, standings, sims, playoffs, difficulty.
 import { RNG, clamp, lerp } from './rng.js';
 import { TEAM_DATA, COACH_FIRST, LAST } from './data.js';
-import { makePlayer, buildLineup, unitRating, POSITIONS, SLOTS, makeRegularPlayer, TRAITS } from './players.js';
+import { makePlayer, buildLineup, unitRating, POSITIONS, SLOTS, makeRegularPlayer, TRAITS, CELEBS } from './players.js';
 
 export const WEEKS = 16;
 export const SAVE_VERSION = 1;
@@ -56,8 +56,9 @@ export function migrateCareer(c) {
   const rng = rngOf(c);
   if (!c.regulars) c.regulars = genRegulars(rng);
   c.music ||= { owned: ['fanfare'], equipped: 'fanfare' };
-  const fix = (p) => { if (p && !p.trait && TRAITS[p.pos]) p.trait = rng.pick(TRAITS[p.pos])[0]; };
-  c.roster.forEach(fix); (c.freeAgents || []).forEach(fix); (c.draft?.pool || []).forEach(fix);
+  const fix = (p) => { if (p && !p.trait && TRAITS[p.pos]) p.trait = rng.pick(TRAITS[p.pos])[0]; if (p && !p.celeb) p.celeb = rng.pick(CELEBS); };
+  c.roster.forEach(fix);
+  Object.values(c.regulars).flat().forEach((p) => { if (!p.celeb) p.celeb = rng.pick(CELEBS); }); (c.freeAgents || []).forEach(fix); (c.draft?.pool || []).forEach(fix);
   saveRng(c, rng);
   return c;
 }

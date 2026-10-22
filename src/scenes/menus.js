@@ -8,7 +8,7 @@ import { SONGS, songEvents } from '../music.js';
 import { ACHIEVEMENTS, achCount, checkLive } from '../achievements.js';
 import { TEAM_DATA, CONFS, CONF_ABBR, DIVS } from '../data.js';
 import { DIFF_MULT, newCareer, userTeam, teamName, DIFFS, WEEKS, userGameThisWeek, divisionTeams, ROUND_NAMES, teamRatings, diffParams, userEliminated } from '../league.js';
-import { ATTRS, ATTR_LABEL, MAX_STARS, displayName, xpForLevel, buildLineup, ovr, ovrColor, traitInfo } from '../players.js';
+import { ATTRS, ATTR_LABEL, MAX_STARS, displayName, xpForLevel, buildLineup, ovr, ovrColor, traitInfo, CELEBS } from '../players.js';
 import * as O from '../office.js';
 import { startSeason, status, simUserGame, finishUserGame, simRound, opponentOf, resumableGame } from '../flow.js';
 import { Match } from '../match.js';
@@ -398,6 +398,9 @@ export class PlayerScene {
     panel(4, 124, 376, 52);
     text('SEASON', 10, 129, C.gold); text('CAREER', 10, 151, C.gold);
     if (p.season) { text(statLine(p, p.season), 10, 138, '#fff'); text(statLine(p, p.career), 10, 160, '#fff'); }
+    // each player's own touchdown celebration (yours to change)
+    text(`TD CELEBRATION: ${p.celeb || 'SPIKE'}`, 374, 129, C.gold, 1, 'right');
+    if (this.mode === 'roster') UI.button(318, 136, 58, 13, 'CHANGE', () => { const i = CELEBS.indexOf(p.celeb); p.celeb = CELEBS[(i + 1) % CELEBS.length]; }, { color: '#7e2553', small: true });
     // actions
     const y = 182;
     if (this.mode === 'roster') {

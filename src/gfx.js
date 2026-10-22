@@ -2,6 +2,8 @@
 // BW x BH is the guaranteed minimum logical area (menus are laid out in it); W x H grow to fill the screen.
 export const BW = 384, BH = 216;
 export let W = BW, H = BH, SCALE = 1;
+// pixel-art assets are smoothed with Scale2x (EPX) to this factor and drawn into a full-resolution canvas
+export let HI = 1;
 export const SAFE = { l: 0, r: 0, t: 0, b: 0 }; // notch / home-indicator insets in logical px
 export let PORTRAIT = false;
 export let ctx = null;
@@ -33,15 +35,50 @@ function resize() {
   if (!PORTRAIT && (w < BW || h < BH)) { s = Math.max(1, s - 1); w = Math.floor(dw / s); h = Math.floor(dh / s); }
   w = Math.max(BW, Math.min(PORTRAIT ? 2000 : MAX_W, w)); h = Math.max(PORTRAIT ? 1 : BH, Math.min(PORTRAIT ? 2000 : MAX_H, h));
   SCALE = s;
-  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  // the canvas is backed at full device resolution; drawing code keeps using logical W x H coordinates
+  const dw2 = Math.round(w * s), dh2 = Math.round(h * s);
+  if (canvas.width !== dw2 || canvas.height !== dh2) { canvas.width = dw2; canvas.height = dh2; }
   W = w; H = h;
+  HI = s >= 4 ? 4 : s >= 2 ? 2 : 1;
   ctx = canvas.getContext('2d');
+  if (ctx.setTransform) ctx.setTransform(s, 0, 0, s, 0, 0);
   ctx.imageSmoothingEnabled = false;
   canvas.style.width = (w * s / dpr) + 'px';
   canvas.style.height = (h * s / dpr) + 'px';
   const cs = getComputedStyle(probe), k = dpr / s;
   SAFE.t = Math.ceil(parseFloat(cs.paddingTop) * k) || 0; SAFE.r = Math.ceil(parseFloat(cs.paddingRight) * k) || 0;
   SAFE.b = Math.ceil(parseFloat(cs.paddingBottom) * k) || 0; SAFE.l = Math.ceil(parseFloat(cs.paddingLeft) * k) || 0;
+}
+// ---------- Scale2x (EPX) smoothing for pixel art ----------
+function scale2x(src) {
+  const w = src.width, h = src.height, sx = src.getContext('2d');
+  const id = sx.getImageData ? sx.getImageData(0, 0, w, h) : null;
+  if (!id || !id.data) return null;
+  const s = new Uint32Array(id.data.buffer.slice(0));
+  const out = document.createElement('canvas'); out.width = w * 2; out.height = h * 2;
+  const ox = out.getContext('2d'), od = ox.createImageData(w * 2, h * 2), o = new Uint32Array(od.data.buffer);
+  const at = (x, y) => s[Math.min(h - 1, Math.max(0, y)) * w + Math.min(w - 1, Math.max(0, x))];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const P = at(x, y), A = at(x, y - 1), B = at(x + 1, y), C = at(x - 1, y), D = at(x, y + 1);
+    let e0 = P, e1 = P, e2 = P, e3 = P;
+    if (C === A && C !== D && A !== B) e0 = A;
+    if (A === B && A !== C && B !== D) e1 = B;
+    if (D === C && D !== B && C !== A) e2 = C;
+    if (B === D && B !== A && D !== C) e3 = D;
+    const i = (y * 2) * (w * 2) + x * 2;
+    o[i] = e0; o[i + 1] = e1; o[i + w * 2] = e2; o[i + w * 2 + 1] = e3;
+  }
+  ox.putImageData(od, 0, 0);
+  return out;
+}
+// smoothed copy of a pixel-art canvas at the current HI factor (cached on the canvas)
+export function hi(c) {
+  if (HI <= 1) return c;
+  if (c._hi && c._hiLevel === HI) return c._hi;
+  let out = c;
+  try { for (let f = 1; f < HI; f *= 2) { const n = scale2x(out); if (!n) { out = c; break; } out = n; } } catch (_) { out = c; }
+  c._hi = out; c._hiLevel = HI;
+  return out;
 }
 // top-left of the centered BW x BH layout box used by menus
 export function boxX() { return Math.floor((W - BW) / 2); }
@@ -69,6 +106,7 @@ const fontCache = new Map();
 function fontAtlas(color) {
   let c = fontCache.get(color);
   if (c) return c;
+  if (fontCache.size > 64) fontCache.clear();
   c = document.createElement('canvas');
   c.width = CHARS.length * 4; c.height = 6;
   const x = c.getContext('2d');
@@ -91,11 +129,12 @@ export function text(s, x, y, color = '#fff', scale = 1, align = 'left', shadow 
   drawStr(s, x, y, color, scale);
 }
 function drawStr(s, x, y, color, scale) {
-  const a = fontAtlas(color);
+  const a = fontAtlas(color), ha = hi(a);
   for (let i = 0; i < s.length; i++) {
     const j = idx[s[i]];
     if (j === undefined || s[i] === ' ') continue;
-    ctx.drawImage(a, j * 4, 0, 3, 5, x + i * 4 * scale, y, 3 * scale, 5 * scale);
+    const k = a === ha ? 1 : HI;
+    ctx.drawImage(ha, j * 4 * k, 0, 3 * k, 5 * k, x + i * 4 * scale, y, 3 * scale, 5 * scale);
   }
 }
 // word-wrap into lines of max chars
@@ -185,6 +224,7 @@ function bigAtlas(color, bold) {
   const key = color + bold;
   let c = bigCache.get(key);
   if (c) return c;
+  if (bigCache.size > 64) bigCache.clear();
   const cw = bold ? 6 : 5;
   c = document.createElement('canvas'); c.width = BCH.length * cw; c.height = 7;
   const x = c.getContext('2d'); x.fillStyle = color;
@@ -201,9 +241,9 @@ export function big(s, x, y, color = '#fff', o = {}) {
   const wpx = bigWidth(s, scale, bold);
   if (o.align === 'center') x -= Math.floor(wpx / 2); else if (o.align === 'right') x -= wpx;
   x = Math.round(x); y = Math.round(y);
-  const draw = (col, dx, dy) => { const a = bigAtlas(col, bold);
+  const draw = (col, dx, dy) => { const a0 = bigAtlas(col, bold), a = hi(a0), k = a === a0 ? 1 : HI;
     for (let i = 0; i < s.length; i++) { const j = bidx[s[i]]; if (j === undefined || s[i] === ' ') continue;
-      ctx.drawImage(a, j * cw, 0, cw, 7, x + i * adv + dx, y + dy, cw * scale, 7 * scale); } };
+      ctx.drawImage(a, j * cw * k, 0, cw * k, 7 * k, x + i * adv + dx, y + dy, cw * scale, 7 * scale); } };
   const oc = o.outline === undefined ? '#0b0d1c' : o.outline;
   if (o.shadow !== false && oc) draw(oc, 0, scale + (o.outline === null ? 0 : 1));
   if (oc) for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) draw(oc, dx, dy);
@@ -288,7 +328,7 @@ export function playerSprite(primary, secondary, frameI, facing, skin = 0, pants
   spriteCache.set(key, c);
   return c;
 }
-export function drawSprite(img, x, y) { ctx.drawImage(img, Math.round(x), Math.round(y)); }
+export function drawSprite(img, x, y) { ctx.drawImage(hi(img), Math.round(x), Math.round(y), img.width, img.height); }
 // big helmet badge for menus (team logo stand-in), drawn at integer scale
 const HELMET = ['....ssssss....', '..hhhhhhhhhh..', '.hhhhhhhhhhhh.', 'hhhhhhhllhhhhh', 'hhhhhhllllhhmm', 'hhhhhhhllhhm.m',
   'hhhhhhhhhhhmmm', '.hhhhhhhhhhm.m', '..hhhhhhhhmmm.', '...hhhhhh.....'];
@@ -296,14 +336,14 @@ export function helmet(x, y, primary, secondary, scale = 2, facing = 1) {
   const key = 'helm' + primary + secondary + facing;
   let c = spriteCache.get(key);
   if (!c) { c = buildSprite(HELMET, { h: primary, s: secondary, l: secondary, m: '#d8d8d8' }, facing); spriteCache.set(key, c); }
-  ctx.drawImage(c, Math.round(x), Math.round(y), c.width * scale, c.height * scale);
+  ctx.drawImage(hi(c), Math.round(x), Math.round(y), c.width * scale, c.height * scale);
 }
 const BALL = [['.bbb.', 'bwbwb', '.bbb.'], ['.bbb.', 'bbwbb', '.bbb.'], ['..b..', '.bwb.', '..b..']];
 export function ballSprite(x, y, frame = 0) {
   const key = 'ball' + frame;
   let c = spriteCache.get(key);
   if (!c) { c = buildSprite(BALL[frame % 3], { b: '#8b4a1c', w: '#f4f4f4' }, 1); spriteCache.set(key, c); }
-  ctx.drawImage(c, Math.round(x) - 3, Math.round(y) - 2);
+  ctx.drawImage(hi(c), Math.round(x) - 3, Math.round(y) - 2, c.width, c.height);
 }
 
 // ---------- themed widgets ----------
