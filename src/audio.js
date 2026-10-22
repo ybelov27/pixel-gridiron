@@ -29,6 +29,16 @@ function noise(dur, vol = 0.3, freq = 1000, q = 1, delay = 0, attack = 0.005) {
   g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + dur + 0.05);
 }
+// play a touchdown song (see music.js); returns its length in seconds
+export function playSong(events) {
+  if (!ac || !audio.enabled) return;
+  for (const e of events) {
+    if (e.drum === 'k') { tone(120, 0.12, 'sine', 0.45, -70, e.t); }
+    else if (e.drum === 's') noise(0.1, 0.35, 1800, 0.8, e.t);
+    else if (e.drum === 'h') noise(0.04, 0.12, 7000, 1.5, e.t);
+    else if (e.f) tone(e.f, e.d, e.wave, e.vol, 0, e.t);
+  }
+}
 export const sfx = {
   click() { tone(880, 0.05, 'square', 0.12); },
   snap() { noise(0.06, 0.5, 2500, 2); tone(140, 0.06, 'square', 0.2); },

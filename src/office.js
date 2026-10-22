@@ -2,7 +2,7 @@
 import { clamp } from './rng.js';
 import { COACH_FIRST, LAST, FIRST } from './data.js';
 import { makePlayer, starsOf, salaryFor, xpForLevel, addStats, newStats, MAX_STARS, ATTRS, buildLineup, POSITIONS, displayName } from './players.js';
-import { rngOf, saveRng, addNews, userTeam, newId, genSchedule, seedPlayoffs, pct, genRoster, genRegulars, syncUserTeamRatings, ROUND_NAMES, userEliminated, teamName, WEEKS } from './league.js';
+import { DIFF_MULT, rngOf, saveRng, addNews, userTeam, newId, genSchedule, seedPlayoffs, pct, genRoster, genRegulars, syncUserTeamRatings, ROUND_NAMES, userEliminated, teamName, WEEKS } from './league.js';
 
 export const COSTS = { meet: 1, rest: 1, capRaise: 5, capStep: 10 };
 export const capUsed = (c) => Math.round(c.roster.reduce((s, p) => s + p.salary, 0) * 10) / 10;
@@ -40,6 +40,19 @@ export function fireCoord(c, role) {
   c.coords[role] = null; syncUserTeamRatings(c);
 }
 
+// ---------- touchdown music store ----------
+export function buySong(c, song) {
+  c.music ||= { owned: ['fanfare'], equipped: 'fanfare' };
+  if (c.music.owned.includes(song.id)) return 'ALREADY OWNED';
+  if (!spend(c, song.price)) return 'NOT ENOUGH CC';
+  c.music.owned.push(song.id); c.music.equipped = song.id;
+  addNews(c, `NEW TOUCHDOWN SONG: ${song.name}.`);
+  return null;
+}
+export function equipSong(c, song) {
+  if (!c.music.owned.includes(song.id)) return 'BUY IT FIRST';
+  c.music.equipped = song.id; return null;
+}
 // ---------- facilities / boosts ----------
 export function upgradeFacility(c, key) {
   const lvl = c.facilities[key];
@@ -133,7 +146,7 @@ export function genInitialRound(c) {
   const wantQB = !have.has('QB');
   for (let i = 0; i < 8; i++) {
     const pos = i === 0 && wantQB ? 'QB' : rng.pick(['QB', 'RB', 'WR', 'WR', 'TE', 'OL', 'OL', 'K', 'DL', 'DL', 'LB', 'LB', 'DB', 'DB']);
-    const st = clamp(Math.round(rng.range(1.5, 3.6 - r * 0.08) * 2) / 2, 1.5, 3.5);
+    const st = clamp(Math.round(rng.range(1.5, 3.2 - r * 0.1) * 2) / 2, 1.5, 3);
     const p = makePlayer(rng, pos, st, { id: newId(c), age: rng.int(22, 31), years: rng.int(2, 4), morale: 75 });
     p.scout = { stars: p.stars, potLo: p.pot, potHi: p.pot };
     pool.push(p);
@@ -191,7 +204,9 @@ export function postGame(c, info) {
   cc += Math.floor(c.fan / 34) + Math.floor(c.facilities.stadium / 2.5);
   if (info.playoff) cc += 2;
   if (info.title) cc += 5;
-  c.cc += cc; sum.cc = cc;
+  const mult = DIFF_MULT[c.settings.difficulty] || DIFF_MULT.MEDIUM;
+  cc = Math.max(1, Math.round(cc * mult.cc));
+  c.cc += cc; sum.cc = cc; sum.mult = mult.cc; sum.diff = c.settings.difficulty;
   const margin = info.us - info.them;
   c.fan = clamp(c.fan + (won ? 3 : tie ? 0 : -3) + (margin >= 17 ? 2 : margin <= -17 ? -2 : 0) + (c.facilities.stadium - 2.5) * 0.4, 0, 100);
   const opp = c.teams[info.oppId], me = userTeam(c);
@@ -213,7 +228,7 @@ export function postGame(c, info) {
         + (s.tkl || 0) * 4 + (s.sck || 0) * 12 + (s.dint || 0) * 15 + (s.fgm || 0) * 8 + (won ? 10 : 0);
       const isOff = ['QB', 'RB', 'WR', 'TE', 'OL'].includes(p.pos);
       const coord = isOff ? c.coords.oc : ['DL', 'LB', 'DB'].includes(p.pos) ? c.coords.dc : null;
-      xp = Math.max(5, Math.round(xp * trainF * (1 + 0.06 * (coord?.stars || 0))));
+      xp = Math.max(5, Math.round(xp * trainF * mult.xp * (1 + 0.06 * (coord?.stars || 0))));
       p.xp += xp; sum.xp.push([p, xp]);
       while (p.xp >= xpForLevel(p.level)) { p.xp -= xpForLevel(p.level); p.level++; p.skillPts++; sum.levelUps.push(p); }
       const sta = p.attrs.STA ?? 5;
@@ -385,8 +400,8 @@ export function prepareResign(c, fresh = false) {
   }
   for (const k of Object.keys(c.facilities)) c.facilities[k] = Math.max(1, c.facilities[k] - 0.5);
   for (const t of c.teams) if (t.id !== c.userTeamId) {
-    t.off = Math.round(clamp(t.off + (2.25 - t.off) * 0.2 + rng.range(-0.45, 0.45), 1, 5) * 10) / 10;
-    t.def = Math.round(clamp(t.def + (2.25 - t.def) * 0.2 + rng.range(-0.45, 0.45), 1, 5) * 10) / 10;
+    t.off = Math.round(clamp(t.off + (2.1 - t.off) * 0.2 + rng.range(-0.45, 0.45), 1, 5) * 10) / 10;
+    t.def = Math.round(clamp(t.def + (2.1 - t.def) * 0.2 + rng.range(-0.45, 0.45), 1, 5) * 10) / 10;
   }
   saveRng(c, rng);
   c.expiring = c.roster.filter((p) => p.years <= 0).map((p) => p.id);

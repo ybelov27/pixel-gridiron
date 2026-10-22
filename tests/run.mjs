@@ -9,6 +9,7 @@ import { Match } from '../src/match.js';
 import * as O from '../src/office.js';
 import { status, startSeason, simUserGame, simRound, finishUserGame, resumableGame } from '../src/flow.js';
 import { serialize, deserialize } from '../src/save.js';
+import { SONGS } from '../src/music.js';
 
 let passed = 0;
 const test = (name, fn) => { try { fn(); passed++; console.log('ok  -', name); } catch (e) { console.error('FAIL-', name, '\n', e); process.exitCode = 1; } };
@@ -210,8 +211,9 @@ test('old saves get named regulars and player skills on load', () => {
   assert.ok(Object.values(lu).flat().every((p) => p.last && p.last !== 'REGULAR'), 'every lineup slot is a named player');
 });
 test('arm strength decides who can throw deep, and adds zip', () => {
-  assert.ok(maxThrow(2.5) < 36, 'weak arms are short');
-  assert.ok(maxThrow(10) >= 70, 'elite arms go deep');
+  assert.ok(maxThrow(2.5) < 30, 'weak arms are short');
+  assert.ok(maxThrow(5) < 40, 'average arms are medium range');
+  assert.ok(maxThrow(10) >= 55, 'elite arms go deep');
   assert.ok(flightOf(40, false, 10).T < flightOf(40, false, 2).T);
 });
 test('fantasy draft: pick your stars before season 1, then play a season', () => {
@@ -226,6 +228,18 @@ test('fantasy draft: pick your stars before season 1, then play a season', () =>
   const r = runCareer(c, 1, false);
   assert.equal(c.year, 2);
   console.log(`      drafted ${c.history[0].team} went ${c.history[0].w}-${c.history[0].l}-${c.history[0].t}`);
+});
+test('harder difficulty pays more CC; touchdown songs can be bought and equipped', () => {
+  const pay = (d) => { const c = newCareer({ seed: 4, teamId: 2, difficulty: d }); startSeason(c); const g = userGameThisWeek(c); return finishUserGame(c, g, { us: 28, them: 7, ot: false, stats: {}, oppId: g.h === c.userTeamId ? g.a : g.h }).cc; };
+  const easy = pay('EASY'), med = pay('MEDIUM'), ext = pay('EXTREME');
+  console.log(`      win pays: easy ${easy} CC, medium ${med} CC, extreme ${ext} CC`);
+  assert.ok(easy < med && med < ext);
+  const c = newCareer({ seed: 5, teamId: 0 }); c.cc = 7;
+  assert.equal(O.buySong(c, SONGS[2]), 'NOT ENOUGH CC');
+  assert.equal(O.buySong(c, SONGS[1]), null);
+  assert.equal(c.cc, 1); assert.equal(c.music.equipped, SONGS[1].id);
+  assert.equal(O.equipSong(c, SONGS[0]), null); assert.equal(c.music.equipped, 'fanfare');
+  assert.equal(deserialize(serialize(c)).music.owned.length, 2);
 });
 test('deserialize rejects garbage', () => {
   assert.throws(() => deserialize('{"hello":1}'));

@@ -2,7 +2,8 @@
 import * as G from '../gfx.js';
 import { rect, frame, text, line, px, panel, playerSprite, drawSprite, starIcon, textWidth, big, bigWidth, ballSprite, shadeColor } from '../gfx.js';
 import { UI } from '../ui.js';
-import { sfx } from '../audio.js';
+import { sfx, playSong } from '../audio.js';
+import { songById, songEvents } from '../music.js';
 import { app } from '../app.js';
 import { FW, flightOf } from '../play.js';
 import { displayName, ovr, ovrColor } from '../players.js';
@@ -75,6 +76,9 @@ export class GameScene {
         if (g >= 15) this.hype = 1.2;
       }
     }
+    // a new formation jogs up to the line instead of popping in
+    if (p !== this.lastPlay) { this.lastPlay = p; this.formT = p && !p.started && p.mode !== 'return' ? 0.55 : 0; }
+    if (this.formT > 0) this.formT -= dt;
     // dust kicked up by a fast ball carrier
     this.dustT -= dt;
     const car = p && p.carrier && !p.result ? p.carrier : null;
@@ -89,7 +93,7 @@ export class GameScene {
   playSfx(e) {
     const map = { snap: 'snap', throw: 'throw', catch: 'catch', tackle: 'tackle', juke: 'juke', miss: 'juke', dive: 'juke', whistle: 'whistle',
       kick: 'kick', int: 'bad', drop: 'drop', deflect: 'drop', groan: 'groan', crowd: 'crowd', good: 'good', bad: 'bad', handoff: 'hike' };
-    if (e === 'td') { sfx.crowd(true); sfx.good(); this.flash = 0.5; this.hype = 3; this.confetti(); return; }
+    if (e === 'td') { sfx.crowd(true); playSong(songEvents(songById(app.career && app.career.music && app.career.music.equipped))); this.flash = 0.5; this.hype = 3; this.confetti(); return; }
     if (e === 'tackle') { this.shake = 0.18; this.dust(); if (navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) try { navigator.vibrate(12); } catch (_) {} }
     if (e === 'int') this.shake = 0.3;
     if (e === 'miss') this.dust(true);
@@ -275,8 +279,21 @@ export class GameScene {
     rect(0, FT - 1, W, 1, '#fff'); rect(0, fb, W, 1, '#fff');
     // sideline below the field
     rect(0, fb + 1, W, SIDE_H, snow ? '#7d9c86' : '#256f30');
-    const off = Math.floor(this.camX * SX);
-    for (let x = -(off % 64); x < W; x += 64) { rect(x + 8, fb + 3, 26, 3, shadeColor(this.home().c1, 0.8)); }
+    // team benches: little players standing along the sideline between the 30s (ours left of midfield, theirs right)
+    for (let yd = 30; yd <= 90; yd += 1.25) {
+      if (yd > 57 && yd < 63) continue;
+      const bx = this.sx(yd); if (bx < -4 || bx > W + 4) continue;
+      const t = yd < 60 ? m.me : m.opp, h = ((yd * 8) * 2654435761) >>> 0;
+      const bob = this.hype > 0 && t === m.me ? Math.round(Math.max(0, Math.sin(this.t * 14 + yd))) * 2 : 0;
+      rect(bx, fb + 2 - bob, 2, 1, t.c2 === '#111111' ? '#444' : t.c2);   // helmet stripe / cap
+      rect(bx, fb + 3 - bob, 2, 3, h % 5 === 0 ? '#e9e9e9' : t.c1);     // jersey (some in warmups)
+    }
+    // end-zone pylons on all four goal-line / end-line corners
+    for (const px2 of [0, 10, 110, 120]) for (const py2 of [0, FW]) {
+      const qx = this.sx(px2), qy = this.sy(py2);
+      if (qx < -4 || qx > W + 4) continue;
+      rect(qx - 1, qy - 4, 3, 5, '#0b0d1c'); rect(qx, qy - 3, 1, 3, '#ff7a1a');
+    }
     // goal posts (back line) with shadow
     for (const gx of [0, 120]) {
       const s = this.sx(gx), cy = this.sy(FW / 2);
@@ -296,14 +313,19 @@ export class GameScene {
         rect(f, FT, 1, FW * SY, '#ffec27');
         rect(f - 4, FT - 11, 9, 9, '#0b0d1c'); rect(f - 3, FT - 10, 7, 7, '#ff9f1c');
         text(String(Math.min(4, m.down)), f - 1, FT - 9, '#0b0d1c');
+        // chain crew on the near sideline: two poles and the 10-yard chain between them
+        const fb2 = this.fieldB, c0 = this.sx(10 + m.fd - 10);
+        rect(Math.min(c0, f), fb2 + 4, Math.abs(f - c0), 1, '#c9c9c9');
+        for (const cx of [c0, f]) { rect(cx - 1, fb2 - 4, 3, 9, '#0b0d1c'); rect(cx, fb2 - 3, 1, 7, '#ff9f1c'); rect(cx - 1, fb2 - 5, 3, 2, '#ff9f1c'); }
       }
     }
   }
   home() { return this.m.userHome ? this.m.me : this.m.opp; }
   drawPlay(p) {
     const m = this.m;
+    const jog = !p.started && this.formT > 0 ? Math.pow(this.formT / 0.55, 2) : 0;
     // routes before the snap: dotted path, chevrons showing direction, arrowhead (or stop bar) at the end
-    if (!p.started && p.receivers) {
+    if (!p.started && p.receivers && jog < 0.05) {
       for (const r of p.receivers) {
         if (!r.route || r.block) continue;
         const col = r.run ? '#ffa300' : '#fff1e8';
@@ -361,15 +383,15 @@ export class GameScene {
     for (const e of ents) {
       const off = e.side === 'off';
       const T = off ? m.me : m.opp;
-      const x = this.sx(e.x);
-      let y = this.sy(e.y);
+      const x = this.sx(e.x + (off ? -7 : 7) * jog + (e.y - FW / 2) * jog * 0.15);
+      let y = this.sy(e.y - (e.y - FW / 2) * jog * 0.25);
       if (x < -16 || x > G.W + 16) continue;
       const pants = off ? '#e9e9e9' : shadeColor(T.c2 === '#111111' ? '#555555' : T.c2, 0.75);
       const face = off ? 1 : -1;
       const down = (e.down && p.result) || (e.stun > 0.3 && !e.held);
       const sp = Math.hypot(e.vx, e.vy);
       // pick a pose
-      let fr = down ? 5 : sp > 0.6 ? [1, 2, 3, 2][Math.floor(e.anim * 1.4) % 4] : 0;
+      let fr = down ? 5 : sp > 0.6 || jog > 0.03 ? [1, 2, 3, 2][Math.floor((e.anim + this.t * 6) * 1.4) % 4] : 0;
       let lift = 0;
       if (!down) {
         if (e === p.QB && p.mode !== 'return' && !p.carrier && ((!p.thrown && this.g && this.g.kind === 'aim') || (p.thrown && p.t - p.throwT < 0.22))) fr = 4;
@@ -453,15 +475,63 @@ export class GameScene {
       rect(x, y, 2, q.sx ? 3 : 2, q.c);
     }
   }
+  // opponent drive: both teams line up and run each play from the ticker (they attack leftward)
   drawOpp() {
     const m = this.m, s = m.oppState; if (!s) return;
-    const yd = m.oppMarker();
-    const bx = this.sx(10 + (100 - yd)), by = this.sy(FW / 2) + 10;
-    rect(bx, this.FT, 1, FW * this.SY, '#ff4d5e');
-    const fr = (i) => [1, 2, 3, 2][(Math.floor(this.t * 7) + i) % 4];
-    for (let i = 0; i < 6; i++) drawSprite(playerSprite(m.opp.c1, m.opp.c2, fr(i), -1, i, shadeColor(m.opp.c2 === '#111111' ? '#555555' : m.opp.c2, 0.75)), bx + 6 + (i % 3) * 9, by - 26 + Math.floor(i / 3) * 24 + (i % 2) * 6);
-    for (let i = 0; i < 6; i++) drawSprite(playerSprite(m.me.c1, m.me.c2, fr(i + 1), 1, i + 1, '#e9e9e9'), bx - 18 - (i % 3) * 9, by - 26 + Math.floor(i / 3) * 24 + (i % 2) * 6);
-    ballSprite(bx + 2, by - 8, Math.floor(this.t * 10) % 3);
+    const per = 0.55, n = s.lines.length;
+    const idx = Math.min(n - 1, Math.floor(s.t / per)), u = Math.min(1, s.t / per - idx);
+    const from = s.pos[Math.min(idx, s.pos.length - 1)], to = s.pos[Math.min(idx + 1, s.pos.length - 1)];
+    const wx = (yd) => 10 + (100 - yd);
+    const L = wx(from), gain = wx(to) - L;           // negative = toward our goal
+    const line = s.lines[idx] || '';
+    const pass = /PASS|INCOMPLETE|INTERCEPT/.test(line), sack = /SACK/.test(line), last = idx === n - 1;
+    const cy = FW / 2, ease = (k) => k * k * (3 - 2 * k);
+    const play = last ? 0 : ease(Math.max(0, Math.min(1, (u - 0.2) / 0.65)));
+    const ents = [];
+    const add = (team, x, y, f, moving, isBall) => ents.push({ team, x, y, f, moving, isBall });
+    // offense formation (theirs, facing left)
+    const offs = [];
+    for (let i = -2; i <= 2; i++) offs.push([L + 0.8, cy + i * 1.3, 'OL']);
+    offs.push([L + 0.8, cy + 4, 'TE'], [L + 4.5, cy, 'QB'], [L + 6.5, cy + 1.5, 'RB'], [L + 0.8, cy - 16, 'WR'], [L + 0.8, cy + 17, 'WR'], [L + 0.8, cy - 9, 'WR']);
+    const carrierI = sack ? 6 : pass ? 8 : 7;
+    let ballX = L + 4.5, ballY = cy;
+    offs.forEach(([x, y, r], i) => {
+      let px2 = x, py2 = y;
+      if (i === carrierI) {
+        if (sack) { px2 = x + 3 * play; }
+        else if (pass) { px2 = x + (gain - 2) * play; py2 = y + (cy - y) * 0.35 * play; }
+        else { px2 = x + (gain - 6.5) * play; py2 = y + Math.sin(play * 3) * 1.5; }
+        ballX = px2; ballY = py2;
+      } else if (r === 'OL') px2 = x - 0.8 * play;
+      else if (r === 'WR' || r === 'TE') px2 = x + Math.min(0, gain - 4) * play * 0.6;
+      add('o', px2, py2, -1, play > 0 && play < 1, i === carrierI);
+    });
+    // our defense (facing right) converges on the ball carrier
+    const defs = [];
+    for (let i = 0; i < 4; i++) defs.push([L - 1, cy + (i - 1.5) * 2.2]);
+    for (let i = 0; i < 3; i++) defs.push([L - 5, cy + (i - 1) * 5]);
+    defs.push([L - 6, cy - 16], [L - 6, cy + 17], [L - 12, cy - 8], [L - 12, cy + 8]);
+    defs.forEach(([x, y], i) => {
+      const k = Math.min(0.9, Math.max(0, play - 0.15 - (i % 4) * 0.04) * 1.3);
+      add('d', x + (ballX - 0.8 - x) * k, y + (ballY - y) * k * 0.9, 1, play > 0 && play < 1, false);
+    });
+    // pass in the air during the play
+    let fly = null;
+    if (pass && !last && play > 0.05 && play < 0.45) { const q = (play - 0.05) / 0.4; fly = { x: L + 4.5 + (ballX - L - 4.5) * q, y: cy + (ballY - cy) * q, z: Math.sin(q * Math.PI) * 6 }; }
+    rect(this.sx(L), this.FT, 1, FW * this.SY, '#ff4d5e');
+    ents.sort((a, b) => a.y - b.y);
+    const opPants = shadeColor(m.opp.c2 === '#111111' ? '#555555' : m.opp.c2, 0.75);
+    ents.forEach((e, i) => {
+      const T = e.team === 'o' ? m.opp : m.me, x = this.sx(e.x), y = this.sy(e.y);
+      if (x < -16 || x > G.W + 16) return;
+      const fr = e.moving ? [1, 2, 3, 2][(Math.floor(this.t * 9) + i) % 4] : 0;
+      const img = playerSprite(T.c1, T.c2, fr, e.f, i % 4, e.team === 'o' ? opPants : '#e9e9e9');
+      rect(x - 3, y - 1, 7, 2, 'rgba(0,0,0,0.3)');
+      drawSprite(img, x - 4, y - img.height + 1);
+      if (e.isBall && !fly) ballSprite(x - 3, y - 6, 0);
+    });
+    if (fly) { ballSprite(this.sx(fly.x), this.sy(fly.y, fly.z) - 4, Math.floor(this.t * 14) % 3); }
+    else if (!ents.some((e) => e.isBall)) ballSprite(this.sx(ballX), this.sy(ballY) - 4, 0);
   }
   drawOppPanel() {
     const m = this.m, s = m.oppState; if (!s) return;

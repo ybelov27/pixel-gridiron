@@ -5,8 +5,8 @@ import { eff } from './players.js';
 
 export const FW = 53.33;
 export const spdOf = (v) => 6.0 + v * 0.32;
-// arm strength sets how far a QB can throw (weak ~35 yd, elite ~72 yd) and how fast the ball gets there
-export const maxThrow = (arm) => 22 + arm * 5;
+// arm strength sets how far a QB can throw (weak ~28 yd, average ~38, elite ~58) and how fast the ball gets there
+export const maxThrow = (arm) => 18 + arm * 4;
 const RAD = Math.PI / 180;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 

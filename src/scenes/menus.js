@@ -3,9 +3,10 @@ import * as G from '../gfx.js';
 import { BW as W, BH as H, rect, frame, text, panel, stars, bar, playerSprite, drawSprite, starIcon, wrap, textWidth, big, bigWidth, helmet, icon, THEME, shadeColor, boxX } from '../gfx.js';
 import { UI, fitText } from '../ui.js';
 import { app } from '../app.js';
-import { sfx } from '../audio.js';
+import { sfx, playSong, unlockAudio } from '../audio.js';
+import { SONGS, songEvents } from '../music.js';
 import { TEAM_DATA, CONFS, CONF_ABBR, DIVS } from '../data.js';
-import { newCareer, userTeam, teamName, DIFFS, WEEKS, userGameThisWeek, divisionTeams, ROUND_NAMES, teamRatings, diffParams, userEliminated } from '../league.js';
+import { DIFF_MULT, newCareer, userTeam, teamName, DIFFS, WEEKS, userGameThisWeek, divisionTeams, ROUND_NAMES, teamRatings, diffParams, userEliminated } from '../league.js';
 import { ATTRS, ATTR_LABEL, MAX_STARS, displayName, xpForLevel, buildLineup, ovr, ovrColor, traitInfo } from '../players.js';
 import * as O from '../office.js';
 import { startSeason, status, simUserGame, finishUserGame, simRound, opponentOf, resumableGame } from '../flow.js';
@@ -138,7 +139,7 @@ export class NewCareerScene {
     text(`${CONFS[conf]} CONFERENCE - ${DIVS[div]} DIVISION   (${this.team + 1}/32)`, 12, 92, '#fff');
     UI.button(W - 110, 86, 94, 14, 'RANDOM TEAM', () => { this.team = Math.floor(Math.random() * 32); }, { color: '#7e2553' });
     big('DIFFICULTY', 8, 110, C.gold);
-    DIFFS.forEach((df, i) => UI.button(8 + i * 93, 120, 89, 18, df, () => { this.diff = df; }, { selected: this.diff === df, color: this.diff === df ? C.blue : '#4b5378' }));
+    DIFFS.forEach((df, i) => { UI.button(8 + i * 93, 120, 89, 18, df, () => { this.diff = df; }, { selected: this.diff === df, color: this.diff === df ? C.blue : '#4b5378' }); text(`X${DIFF_MULT[df].cc} CC  X${DIFF_MULT[df].xp} XP`, 8 + i * 93 + 44, 140, this.diff === df ? C.gold : C.dim, 1, 'center'); });
     big('QUARTER LENGTH', 8, 146, C.gold);
     [1, 2, 3].forEach((q, i) => UI.button(8 + i * 58, 156, 54, 18, `${q} MIN`, () => { this.qlen = q; }, { selected: this.qlen === q, color: this.qlen === q ? C.blue : '#4b5378' }));
     big('DYNAMIC', 196, 146, C.gold);
@@ -307,7 +308,7 @@ export class PostGameScene {
     helmet(12, 30, t.c1, t.c2, 2, 1); helmet(W - 44, 30, o.c1, o.c2, 2, -1);
     big(res, W / 2, 28, s.won ? C.gold : '#fff', { align: 'center', scale: 2 });
     big(`${t.abbr} ${s.us} - ${s.them} ${s.opp}${s.ot ? ' OT' : ''}`, W / 2, 50, '#fff', { align: 'center' });
-    big(`+${s.cc} CC`, W / 2, 62, C.gold, { align: 'center', shadow: false });
+    big(`+${s.cc} CC${s.mult && s.mult !== 1 ? `  (X${s.mult} ${s.diff})` : ''}`, W / 2, 62, C.gold, { align: 'center', shadow: false });
     panel(4, 79, 186, 110);
     big('EXPERIENCE', 10, 84, C.gold);
     s.xp.slice().sort((a, b) => b[1] - a[1]).slice(0, 9).forEach(([n, x], i) => { text(fitText(n, 110), 10, 96 + i * 10, '#fff'); text(`+${x} XP`, 184, 96 + i * 10, C.good, 1, 'right'); });
@@ -426,7 +427,7 @@ export class OfficeScene {
   draw() {
     const c = app.career;
     header('FRONT OFFICE', `CC ${c.cc}`);
-    ['FACILITIES', 'STAFF', 'FINANCE'].forEach((l, i) => UI.button(4 + i * 80, 19, 76, 14, l, () => { this.tab = i; }, { selected: this.tab === i, color: this.tab === i ? C.blue : '#4b5378' }));
+    ['FACILITIES', 'STAFF', 'FINANCE', 'STORE'].forEach((l, i) => UI.button(4 + i * 80, 19, 76, 14, l, () => { this.tab = i; }, { selected: this.tab === i, color: this.tab === i ? C.blue : '#4b5378' }));
     if (this.tab === 0) {
       const info = { stadium: 'RAISES FAN RATING AND CC PER GAME', training: 'SPEEDS UP XP GAIN FOR ALL STARS', rehab: 'FASTER INJURY AND CONDITION RECOVERY' };
       Object.keys(info).forEach((k, i) => {
@@ -457,7 +458,7 @@ export class OfficeScene {
           }, { color: C.good });
         });
       });
-    } else {
+    } else if (this.tab === 2) {
       panel(4, 40, 376, 80);
       text('SALARY CAP', 12, 47, C.gold, 2);
       text(`USED ${money(O.capUsed(c))} OF ${money(c.cap)}  -  ROOM ${money(O.capRoom(c))}`, 12, 66, '#fff');
@@ -467,6 +468,20 @@ export class OfficeScene {
       text('COACHING CREDITS', 12, 131, C.gold, 2);
       ['EARNED AFTER EVERY GAME: 3 WIN / 2 TIE / 1 LOSS', 'BONUS FROM FAN RATING (UP TO +2) AND STADIUM (UP TO +2)', 'PLAYOFF GAMES +2, PIXEL BOWL TITLE +5',
         'SPEND ON FACILITIES, STAFF, MEETINGS, REST, CONTRACTS,', 'FREE AGENTS AND THE SALARY CAP.'].forEach((l, i) => text(l, 12, 148 + i * 9, '#fff'));
+    } else {
+      // touchdown music store
+      const mu = c.music || { owned: ['fanfare'], equipped: 'fanfare' };
+      big('TOUCHDOWN MUSIC', 6, 38, C.gold);
+      text('PLAYS EVERY TIME YOU SCORE. TAP PLAY TO PREVIEW.', W - 6, 39, C.dim, 1, 'right');
+      SONGS.forEach((song, i) => {
+        const y = 48 + i * 23, own = mu.owned.includes(song.id), on = mu.equipped === song.id;
+        panel(4, y, 376, 21, on ? '#2a4a3a' : C.panel);
+        big(song.name, 12, y + 7, on ? C.gold : '#fff', { shadow: false });
+        text(own ? (on ? 'EQUIPPED' : 'OWNED') : song.price ? `${song.price} CC` : 'FREE', 186, y + 8, own ? C.good : C.gold);
+        UI.button(236, y + 3, 56, 15, '> PLAY', () => { unlockAudio(); playSong(songEvents(song)); }, { color: '#4b5378' });
+        if (!own) UI.button(298, y + 3, 76, 15, `BUY ${song.price}`, () => { if (!err(O.buySong(c, song))) { unlockAudio(); playSong(songEvents(song)); } }, { color: C.good, disabled: c.cc < song.price });
+        else UI.button(298, y + 3, 76, 15, on ? 'EQUIPPED' : 'EQUIP', () => err(O.equipSong(c, song)), { color: on ? '#2f6b4a' : C.blue, disabled: on });
+      });
     }
   }
 }
@@ -697,7 +712,7 @@ export class SettingsScene {
     text('QUARTER LENGTH', 12, 26, C.gold);
     [1, 2, 3].forEach((q, i) => UI.button(12 + i * 56, 34, 52, 16, `${q} MIN`, () => { s.qlen = q; }, { selected: s.qlen === q, color: s.qlen === q ? C.blue : '#4b5378' }));
     text('DIFFICULTY', 12, 58, C.gold);
-    DIFFS.forEach((d, i) => UI.button(12 + i * 84, 66, 80, 16, d, () => { s.difficulty = d; }, { selected: s.difficulty === d, color: s.difficulty === d ? C.blue : '#4b5378' }));
+    DIFFS.forEach((d, i) => { UI.button(12 + i * 84, 66, 80, 16, d, () => { s.difficulty = d; }, { selected: s.difficulty === d, color: s.difficulty === d ? C.blue : '#4b5378' }); text(`X${DIFF_MULT[d].cc} CC`, 12 + i * 84 + 40, 84, s.difficulty === d ? C.gold : C.dim, 1, 'center'); });
     text('DYNAMIC DIFFICULTY', 12, 90, C.gold);
     UI.button(12, 98, 80, 16, s.dynamic ? 'ON' : 'OFF', () => { s.dynamic = !s.dynamic; }, { color: s.dynamic ? C.good : '#4b5378' });
     text(`CURRENT OFFSET ${c.dyn >= 0 ? '+' : ''}${c.dyn.toFixed(2)} (RISES WITH WINS)`, 100, 103, C.dim);

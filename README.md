@@ -51,11 +51,14 @@ The play is chosen for you. Before the snap, each receiver's route is drawn as a
 ## What's in it
 
 - **Look:** a chunky outlined 5×7 pixel font, outlined player sprites with helmet stripes and run cycles, crowd stands that bounce on big plays, end zones with team names, a midfield logo, a scoreboard HUD, a TOUCHDOWN banner with confetti, screen shake, dust, floating yardage, and weather (snow late in the season at cold-weather stadiums, rain) and night games.
+- **Difficulty pays:** coaching credits and XP scale with difficulty: Easy ×0.75 / ×0.9, Medium ×1, Hard ×1.5 / ×1.15, Extreme ×2 / ×1.3.
+- **Touchdown music store:** Front Office → STORE sells original chiptune touchdown songs for CC. Preview, buy and equip one, and it plays on every touchdown.
 - **Fantasy draft start:** on New Career, set STAR ROSTER to DRAFT THEM to pick your stars round by round (10 rounds, real ratings and skills) before season 1, or choose RANDOM to be handed a squad.
 - **Stamina:** ball carriers run at full speed for a couple of seconds (longer with high STAMINA), then fade, so defenders can run them down. Jukes cost stamina. A stamina bar shows for the ball carrier, and every carry wears a player's condition down over the game.
 - **Interceptions:** contested and badly placed throws can be picked off. The defender returns it live while your players chase him, and a pick-six is possible.
 - **Skills:** every star has a signature skill (CANNON, SNIPER, BURNER, SURE HANDS, BULLDOZER, BALL HAWK, BIG LEG…) that boosts one attribute, shown on the player card. Non-star depth players are real named individuals with their own ratings.
-- **Arm strength matters:** a weak-armed QB tops out around 35 yards while an elite arm reaches about 70 (CANNON adds more). A stronger arm also gets the ball there faster.
+- **Arm strength matters:** a weak-armed QB tops out around 28 yards, an average arm around 38, and an elite arm about 58 (CANNON adds more).
+- **Start small:** new careers begin with a modest squad (1.5–3 star players). Build it up through the draft, free agency and training. A stronger arm also gets the ball there faster.
 - **Injuries:** stars can get hurt during a game on tackles, sacks and defensive drives. A banner announces it, a backup takes over, and the player misses real weeks (Rehab shortens it).
 - **Ratings:** every player has an overall rating (OVR, 40–99). It shows over skill players and defenders on the field, and in the roster, player cards, free agency and the draft.
 - **On field:** 11 v 11 side-scrolling field. Routes, man and deep-zone coverage with reaction lag, a pass rush against your OL, sacks, catches, drops, deflections and interceptions. When a pass is in the air, every nearby receiver and defender breaks toward the landing spot. Also playable kickoff returns, hand-offs, jukes, stutters, dives, broken tackles, fumbles, safeties, out of bounds, 26 auto-selected plays, a FG/PAT aim and power mini-game with wind, punts, kickoffs, onside kicks, 2-point tries and 4th-down decisions. Opponent drives are simulated as a ticker.

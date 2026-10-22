@@ -6,6 +6,8 @@ import { makePlayer, buildLineup, unitRating, POSITIONS, SLOTS, makeRegularPlaye
 export const WEEKS = 16;
 export const SAVE_VERSION = 1;
 export const DIFFS = ['EASY', 'MEDIUM', 'HARD', 'EXTREME'];
+// harder games pay more: coaching credits and XP multipliers per difficulty
+export const DIFF_MULT = { EASY: { cc: 0.75, xp: 0.9 }, MEDIUM: { cc: 1, xp: 1 }, HARD: { cc: 1.5, xp: 1.15 }, EXTREME: { cc: 2, xp: 1.3 } };
 // per-difficulty knobs, interpolated by continuous level (difficulty + dynamic offset)
 const DK = {
   sim: [-0.09, -0.02, 0.04, 0.09], // opponent drive strength
@@ -38,7 +40,7 @@ export function genRoster(c, rng, rating) {
   const chosen = ['QB', 'RB', 'WR', 'WR', rng.pick(['TE', 'OL']), 'K', 'DL', 'LB', 'DB', rng.pick(['DL', 'DB', 'LB'])];
   if (rng.chance(0.5)) chosen.push(rng.pick(['WR', 'OL', 'DL']));
   for (const pos of chosen) {
-    const st = clamp(Math.round((rating + rng.range(-0.6, 0.9)) * 2) / 2, 2, 4.5);
+    const st = clamp(Math.round((rating + rng.range(-0.6, 0.9)) * 2) / 2, 1.5, rating < 2.2 ? 3 : 3.5);
     roster.push(makePlayer(rng, pos, st, { id: newId(c) }));
   }
   return roster;
@@ -53,6 +55,7 @@ export function genRegulars(rng) {
 export function migrateCareer(c) {
   const rng = rngOf(c);
   if (!c.regulars) c.regulars = genRegulars(rng);
+  c.music ||= { owned: ['fanfare'], equipped: 'fanfare' };
   const fix = (p) => { if (p && !p.trait && TRAITS[p.pos]) p.trait = rng.pick(TRAITS[p.pos])[0]; };
   c.roster.forEach(fix); (c.freeAgents || []).forEach(fix); (c.draft?.pool || []).forEach(fix);
   saveRng(c, rng);
@@ -65,7 +68,7 @@ export function newCareer(o) {
     version: SAVE_VERSION, seed, rng: 0, nextId: 1, year: 1, week: 0, phase: 'preseason', stage: null,
     settings: { qlen: o.qlen ?? 2, difficulty: o.difficulty ?? 'MEDIUM', dynamic: o.dynamic ?? true, sound: true },
     dyn: 0, coach: { name: o.coachName || `${rng.pick(COACH_FIRST)} ${rng.pick(LAST)}`, wins: 0, losses: 0, ties: 0, titles: 0, teams: [] },
-    cc: 10, fan: 50, job: 60, cap: 200,
+    cc: 10, fan: 50, job: 60, cap: 200, music: { owned: ['fanfare'], equipped: 'fanfare' },
     facilities: { stadium: 2, training: 2, rehab: 2 },
     coords: { oc: null, dc: null }, coordPool: null,
     teams: [], userTeamId: o.teamId ?? 0, roster: [], schedule: [], playoffs: null,
@@ -73,11 +76,11 @@ export function newCareer(o) {
   };
   c.teams = TEAM_DATA.map((d, i) => ({
     id: i, city: d[0], name: d[1], abbr: d[2], c1: d[3], c2: d[4], conf: Math.floor(i / 16), div: Math.floor(i / 4) % 4,
-    off: Math.round(rng.range(1.4, 3.1) * 10) / 10, def: Math.round(rng.range(1.4, 3.1) * 10) / 10, w: 0, l: 0, t: 0, pf: 0, pa: 0,
+    off: Math.round(rng.range(1.3, 2.9) * 10) / 10, def: Math.round(rng.range(1.3, 2.9) * 10) / 10, w: 0, l: 0, t: 0, pf: 0, pa: 0,
   }));
   if (o.random) c.userTeamId = rng.int(0, 31);
   const ut = c.teams[c.userTeamId];
-  c.roster = o.draftStart ? [] : genRoster(c, rng, 2.5);
+  c.roster = o.draftStart ? [] : genRoster(c, rng, 1.9); // a modest squad: you build it up
   c.regulars = genRegulars(rng);
   if (o.draftStart) { c.stage = 'draft'; c.draft = { kind: 'initial', round: 1, rounds: 10, pool: [], picks: [] }; }
   c.coach.teams.push(ut.abbr);

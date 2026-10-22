@@ -64,6 +64,8 @@ export function makePlayer(rng, pos, stars, o = {}) {
     season: newStats(), career: newStats(), rookie: !!o.rookie, tradeReq: false,
   };
   p.stars = starsOf(p);
+  // a star is never worse than a regular (1.5 stars)
+  while (p.stars < 1.5) { const k = rng.pick(ATTRS[pos]); if (p.attrs[k] < 10) p.attrs[k]++; p.stars = starsOf(p); }
   const youth = clamp((28 - age) / 6, 0, 1);
   p.pot = o.pot ?? clamp(Math.round((p.stars + rng.range(0, 1.2) + youth * rng.range(0.5, 2.5)) * 2) / 2, p.stars, 5);
   if (p.pot < p.stars) p.pot = p.stars;
