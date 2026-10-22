@@ -23,6 +23,12 @@ export function flightOf(d, bullet, arm = 5) {
   return bullet ? { T: (0.12 + d / 34) * zip, peak: 0.5 + d * 0.035 } : { T: (0.35 + d / 22) * zip, peak: 1.5 + d * 0.2 };
 }
 
+// linemen are heavy and slow to change direction; skill players are quick
+function bodyOf(e, role) {
+  const big = role === 'OL' || role === 'DL' || role === 'BLK';
+  e.mass = big ? 1.7 : role === 'LB' || role === 'TE' ? 1.25 : 1;
+  e.acc = big ? 16 : role === 'QB' ? 20 : (e.side === 'def' ? 25 : 22) + (e.p.attrs.SPD || 4) * 0.9;
+}
 export function makeDefender(rating, i, rng) {
   const a = (k) => clamp(Math.round(rating * 2 + rng.gauss() * 1.2), 1, 10);
   return { regular: true, id: null, pos: 'D', attrs: { SPD: a(), TKL: a(), COV: a(), RSH: a(), STR: a() }, condition: 100, morale: 70, stars: rating, skin: i % 4 };
@@ -44,6 +50,7 @@ export class PlaySim {
     const add = (side, role, p, x, y) => {
       const e = { side, role, p, x, y: clamp(y, 1.5, FW - 1.5), vx: 0, vy: 0, stun: 0, cd: 0, trail: [], anim: 0, down: false, route: null, wp: 0, dir: null, star: !p.regular };
       e.spd = spdOf(side === 'off' ? eff(p, 'SPD') : eff(p, 'SPD') + 0) + (side === 'def' ? diff.spd : 0);
+      bodyOf(e, role);
       this.ents.push(e); return e;
     };
     // offense
@@ -93,7 +100,7 @@ export class PlaySim {
     this.CB[0].man = this.WR[0]; this.CB[1].man = this.WR[1]; this.S[0].man = this.WR[2];
     this.LB[0].man = this.TE.block ? null : this.TE; this.LB[2].man = (this.RB.block || this.RB.run) ? null : this.RB;
     this.S[1].deep = true;
-    for (const d of this.defs) d.react = clamp(0.38 - eff(d.p, 'COV') * 0.018 + diff.react + (o.ocStars || 0) * 0.015, 0.05, 0.6);
+    for (const d of this.defs) d.react = clamp(0.26 - eff(d.p, 'COV') * 0.016 + diff.react + (o.ocStars || 0) * 0.015, 0.05, 0.6);
     // pass rush: DL i vs OL pair, center helps the middle two
     const pair = [0, 1, 3, 4];
     const olAvg = this.OL.reduce((s, e) => s + eff(e.p, 'BLK') + eff(e.p, 'STR') * 0.5, 0) / 5;
@@ -196,7 +203,7 @@ export class PlaySim {
     if (this.mode === 'intret') return this.updateIntReturn(dt);
     if (!this.started) return;
     if (this.done) return;
-    if (this.result) { this.endTimer -= dt; this.settle(dt); this.animate(dt); if (this.endTimer <= 0) this.done = true; return; }
+    if (this.result) { this.endTimer -= dt; this.settle(dt); if (this.ball.state === 'loose') this.ballUpdate(dt); this.animate(dt); if (this.endTimer <= 0) this.done = true; return; }
     this.t += dt;
     const qb = this.QB;
     // QB dropback
@@ -232,7 +239,7 @@ export class PlaySim {
       if (d.stun > 0) { d.stun -= dt; d.vx = d.vy = 0; continue; }
       if (d.role === 'DL' && d.engaged) continue;
       if (this.carrier && this.t >= (d.pursueAt ?? 0)) { this.pursue(d, this.carrier, dt); continue; }
-      if (this.ball.state === 'air' && d.toBallAt !== undefined && this.t >= d.toBallAt) { this.moveTo(d, this.ball.x1, this.ball.y1, d.spd * 0.75, dt); continue; }
+      if (this.ball.state === 'air' && d.toBallAt !== undefined && this.t >= d.toBallAt) { this.moveTo(d, this.ball.x1, this.ball.y1, d.spd * 0.9, dt); continue; }
       if (d.role === 'DL' || d.rush) {
         if (d.rush && this.t < d.hold) { this.moveTo(d, this.los + 1, d.y, 2, dt); continue; }
         this.pursue(d, this.carrier || qb, dt, 0.9); continue;
@@ -240,6 +247,7 @@ export class PlaySim {
       this.cover(d, dt);
     }
     for (const e of this.ents) { if (e.cd > 0) e.cd -= dt; if (e.cd2 > 0) e.cd2 -= dt; }
+    this.separate();
     // ball
     this.ballUpdate(dt);
     if (!this.result) this.contacts();
@@ -260,8 +268,30 @@ export class PlaySim {
     const ramp = Math.min(1, 0.45 + this.t * 1.4);
     const s = Math.min(spd * ramp, d / dt);
     const vx = d > 1e-4 ? dx / d * s : 0, vy = d > 1e-4 ? dy / d * s : 0;
-    e.vx += (vx - e.vx) * Math.min(1, dt * 12); e.vy += (vy - e.vy) * Math.min(1, dt * 12);
+    // momentum: velocity changes at most `acc` yd/s^2, so hard cuts take time and pursuers can overrun
+    let ax = vx - e.vx, ay = vy - e.vy;
+    const am = Math.hypot(ax, ay), lim = (e.acc || 26) * dt;
+    if (am > lim) { ax *= lim / am; ay *= lim / am; }
+    e.vx += ax; e.vy += ay;
     e.x += e.vx * dt; e.y += e.vy * dt;
+  }
+  // bodies don't pass through each other; defenders running into blockers get slowed
+  separate() {
+    const E = this.ents, n = E.length, R = 0.62;
+    for (let i = 0; i < n; i++) {
+      const a = E[i]; if (a.down) continue;
+      for (let j = i + 1; j < n; j++) {
+        const b = E[j]; if (b.down) continue;
+        if (a === this.carrier || b === this.carrier || a === this.returner || b === this.returner) continue; // tackles handle the ball carrier
+        if ((a.ol === b && a.engaged) || (b.ol === a && b.engaged) || a.target === b || b.target === a) continue;
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+        if (d >= R || d < 1e-6) continue;
+        const ma = a.mass || 1, mb = b.mass || 1, push = R - d, nx = dx / d, ny = dy / d;
+        a.x -= nx * push * mb / (ma + mb); a.y -= ny * push * mb / (ma + mb);
+        b.x += nx * push * ma / (ma + mb); b.y += ny * push * ma / (ma + mb);
+        if (a.side !== b.side) { const df = a.side === 'def' ? a : b; df.vx *= 0.82; df.vy *= 0.82; }
+      }
+    }
   }
   followRoute(r, dt) {
     if (!r.route) return;
@@ -269,7 +299,9 @@ export class PlaySim {
       const p = r.route[r.wp];
       const sp = r.block ? 3 : r.spd;
       this.moveTo(r, p.x, p.y, sp, dt);
-      if (Math.hypot(p.x - r.x, p.y - r.y) < 0.4) {
+      const prev0 = r.wp > 0 ? r.route[r.wp - 1] : r.start || (r.start = { x: r.x, y: r.y });
+      const past = (p.x - r.x) * (p.x - prev0.x) + (p.y - r.y) * (p.y - prev0.y) < 0;
+      if (Math.hypot(p.x - r.x, p.y - r.y) < 1.0 || past) {
         const prev = r.wp > 0 ? r.route[r.wp - 1] : null;
         if (prev) { const L = Math.hypot(p.x - prev.x, p.y - prev.y) || 1; r.dir = { x: (p.x - prev.x) / L, y: (p.y - prev.y) / L }; }
         else { const L = Math.hypot(r.vx, r.vy) || 1; r.dir = { x: r.vx / L, y: r.vy / L }; }
@@ -299,7 +331,7 @@ export class PlaySim {
       let px = m.x, py = m.y;
       if (n > back + 2) { px = m.trail[n - back - 2]; py = m.trail[n - back - 1]; }
       const cushion = m.x < this.los + 3 ? 3 : d.role === 'S' ? 1 : 0;
-      const sp = d.spd * (0.8 + eff(d.p, 'COV') * 0.014);
+      const sp = d.spd * (0.86 + eff(d.p, 'COV') * 0.012);
       this.moveTo(d, px + cushion, py, sp, dt);
     } else if (d.deep) {
       const deep = this.receivers.filter((r) => !r.block && !r.run).sort((a, b) => b.x - a.x)[0];
@@ -404,7 +436,12 @@ export class PlaySim {
         return this.end({ kind: lost ? 'fumble' : 'tackle', x: c.x, y: c.y, msg: lost ? 'FUMBLE! LOST' : 'FUMBLE! RECOVERED', stop: lost, sack, fumble: true });
       }
       if (c.x < 10) return this.end(this.mode === 'return' ? { kind: 'touchback', x: 10, y: c.y, msg: 'TOUCHBACK' } : { kind: 'safety', x: c.x, y: c.y, msg: 'SAFETY!' });
-      return this.end({ kind: 'tackle', x: c.x, y: c.y, msg: sack ? 'SACKED!' : 'TACKLED', sack });
+      // forward progress: a runner at speed falls forward; a head-on hit stops him short
+      const headOn = d.vx < -2 && c.vx > 0;
+      const fall = sack ? 0 : clamp(c.vx * (headOn ? 0.04 : 0.13), -0.5, headOn ? 0.4 : 1.6);
+      c.fallTo = c.x + fall;
+      if (!sack && c.fallTo >= 110 && c.y > 0 && c.y < FW && this.mode !== 'return') return this.end({ kind: 'td', x: 110.2, y: c.y, msg: 'TOUCHDOWN! (STRETCHED IT OUT)' });
+      return this.end({ kind: 'tackle', x: c.fallTo, y: c.y, msg: sack ? 'SACKED!' : 'TACKLED', sack });
     }
   }
   ballUpdate(dt) {
@@ -417,7 +454,10 @@ export class PlaySim {
       if (u >= 1) this.resolveCatch();
     } else if (b.state === 'loose') {
       b.t += dt; b.x += b.vx * dt; b.y += b.vy * dt; b.vz -= 30 * dt; b.z = Math.max(0, b.z + b.vz * dt);
-      if (b.z <= 0) { b.vx *= 0.9; b.vy *= 0.9; b.vz = Math.abs(b.vz) * 0.4; }
+      if (b.z <= 0) {
+        if (Math.abs(b.vz) > 2) { b.vz = Math.abs(b.vz) * 0.45; b.vx *= 0.7; b.vy *= 0.7; b.vx += (this.rng.next() - 0.5) * 2; } // odd football bounce
+        else { b.vz = 0; const f = Math.max(0, 1 - dt * 3); b.vx *= f; b.vy *= f; }                                         // roll to a stop
+      }
     }
   }
   resolveCatch() {
@@ -427,14 +467,14 @@ export class PlaySim {
     const defs = this.defs.filter((d) => d.stun <= 0).map((d) => [d, dist(d, L)]).sort((a, b) => a[1] - b[1]);
     const [R, dR] = recs[0] || [null, 99], [Dd, dD] = defs[0] || [null, 99];
     const cat = R ? eff(R.p, 'CAT') : 0, cov = Dd ? eff(Dd.p, 'COV') : 0;
-    const rIn = R && dR <= 2.0 + cat * 0.05, dIn = Dd && dD <= 1.2 + cov * 0.03;
+    const rIn = R && dR <= 2.0 + cat * 0.05, dIn = Dd && dD <= 1.6 + cov * 0.03;
     const rng = this.rng;
     // pressure: 0 = wide open, 1 = blanketed
-    const pressure = clamp((1.7 - dD) / 1.7, 0, 1);
+    const pressure = clamp((2.4 - dD) / 1.75, 0, 1); // bodies can't overlap, so ~0.65 yd is full contact
     this.lastCatch = { dR, dD, rIn, dIn, pressure };
     if (outB) return this.incomplete('INCOMPLETE - OUT');
     if (rIn) {
-      const pCatch = clamp(0.87 - this.wx + cat * 0.02 - dR * 0.1 - Math.min(0.4, (b.err || 0) * 0.08) - pressure * (0.3 + this.diff.contest) - (b.bullet && b.T < 0.5 ? 0.05 : 0), 0.06, 0.97);
+      const pCatch = clamp(0.87 - this.wx + cat * 0.02 - dR * 0.1 - Math.min(0.4, (b.err || 0) * 0.08) - pressure * (0.22 + this.diff.contest) - (b.bullet && b.T < 0.5 ? 0.05 : 0), 0.06, 0.97);
       if (rng.chance(pCatch)) return this.catchBy(R);
       if (pressure > 0.6 && rng.chance((pressure - 0.6) * 0.45 + cov * 0.005 + this.diff.contest * 0.3)) return this.intercept(Dd);
       return this.incomplete(pressure > 0.35 ? 'BROKEN UP!' : 'DROPPED!', true);
@@ -459,7 +499,7 @@ export class PlaySim {
     for (const e of this.ents) if (e.side === 'off') e.chaseAt = this.t + 0.25 + this.rng.range(0, 0.35);
   }
   updateIntReturn(dt) {
-    if (this.result) { this.endTimer -= dt; this.settle(dt); this.animate(dt); if (this.endTimer <= 0) this.done = true; return; }
+    if (this.result) { this.endTimer -= dt; this.settle(dt); if (this.ball.state === 'loose') this.ballUpdate(dt); this.animate(dt); if (this.endTimer <= 0) this.done = true; return; }
     this.t += dt; this.intT += dt;
     const r = this.returner;
     const sp = spdOf(eff(r.p, 'SPD')) * 0.95;
@@ -517,6 +557,7 @@ export class PlaySim {
     }
     for (const e of this.ents) {
       if (e === tk) continue;
+      if (e === c && c.fallTo !== undefined) { c.x += (c.fallTo - c.x) * Math.min(1, dt * 8); c.vx *= 0.8; c.vy *= 0.8; continue; }
       const k = e === c ? (this.result.kind === 'td' ? 0.93 : 0.6) : 0.9;
       e.vx *= k; e.vy *= k; e.x += e.vx * dt; e.y += e.vy * dt;
     }
@@ -531,6 +572,7 @@ export class PlaySim {
     const add = (side, role, p, x, y) => {
       const e = { side, role, p, x, y: clamp(y, 1.5, FW - 1.5), vx: 0, vy: 0, stun: 0, cd: 0, trail: [], anim: 0, down: false, star: !p.regular };
       e.spd = spdOf(eff(p, 'SPD')) + (side === 'def' ? diff.spd * 0.6 : 0);
+      bodyOf(e, role);
       this.ents.push(e); return e;
     };
     // the fastest skill player returns it
@@ -560,7 +602,7 @@ export class PlaySim {
   }
   updateReturn(dt) {
     if (this.done) return;
-    if (this.result) { this.endTimer -= dt; this.settle(dt); this.animate(dt); if (this.endTimer <= 0) this.done = true; return; }
+    if (this.result) { this.endTimer -= dt; this.settle(dt); if (this.ball.state === 'loose') this.ballUpdate(dt); this.animate(dt); if (this.endTimer <= 0) this.done = true; return; }
     this.t += dt;
     const b = this.ball, kr = this.KR;
     if (b.state === 'kick') {
@@ -601,6 +643,7 @@ export class PlaySim {
       else this.pursue(d, tgt, dt);
     }
     for (const e of this.ents) { if (e.cd > 0) e.cd -= dt; if (e.cd2 > 0) e.cd2 -= dt; }
+    this.separate();
     if (this.carrier && !this.result) this.contacts();
     this.animate(dt);
     if (this.t > 25 && !this.result) this.end({ kind: 'tackle', x: (this.carrier || kr).x, y: kr.y, msg: 'WHISTLE' });

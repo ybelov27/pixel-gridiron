@@ -49,15 +49,17 @@ export class GameScene {
     if (m.phase === 'kick' && m.kick && m.kick.kind === 'pat') target = 108;
     else if (m.phase === 'opp') target = 10 + (100 - m.oppMarker());
     else if (p && (m.phase === 'live' || m.phase === 'msg')) {
-      if (p.ball.state === 'air' || p.ball.state === 'kick') target = p.ball.x + (p.mode === 'return' ? 6 : 4);
+      if (p.ball.state === 'air') target = p.ball.x + (p.ball.x1 - p.ball.x) * 0.4 + 4;   // look toward where it will land
+      else if (p.ball.state === 'kick') target = p.ball.x + 6;
       else if (p.mode === 'intret' && p.returner) target = p.returner.x - 10;
-      else if (p.carrier) target = p.carrier.x + 9;
+      else if (p.carrier) target = p.carrier.x + 9 + p.carrier.vx * 0.5;                      // lead the runner
       else if (p.mode === 'return') target = p.KR.x + 12;
       else if (this.g && this.g.kind === 'aim') target = p.QB.x + 24;
       else target = p.QB.x + 20;
     } else if (p && m.phase === 'presnap') target = p.los + 16;
     else if (m.phase === 'msg') target = 10 + m.ballYard + 10;
-    this.camX += (target - this.camX) * Math.min(1, dt * 4);
+    this.camV = (this.camV || 0) + ((target - this.camX) * 9 - (this.camV || 0) * 5.5) * dt; // critically-damped follow
+    this.camX += this.camV * dt;
     this.camX = clamp(this.camX, this.half - 4, 124 - this.half);
     // effects
     if (this.flash > 0) this.flash -= dt;
