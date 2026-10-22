@@ -14,8 +14,11 @@ export class KickGame {
     this.acc = eff(kicker, 'ACC'); this.leg = eff(kicker, 'LEG'); this.cmp = eff(kicker, 'CMP');
     this.maxRange = 38 + this.leg * 3;
     this.stage = 'aim'; this.t = 0; this.ang = 0; this.power = 0; this.pdir = 1; this.u = 0; this.done = false; this.good = false;
-    this.omega = 1.6 + (10 - this.acc) * 0.25 + (10 - this.cmp) * 0.06;
-    this.A = 9;
+    // calmer aim swing; accurate kickers swing slower and narrower
+    this.A = 3 + (10 - this.acc) * 0.5;                                   // swing width (degrees)
+    const speed = 8 + (10 - this.acc) * 2.6 + (10 - this.cmp) * 0.6;   // degrees/second through the middle
+    this.omega = speed / this.A;
+    this.drift = this.wind * dist * 0.003;      // wind: ~1.5 yd at 40 yd in a 12 mph wind
   }
   update(dt) {
     this.t += dt;
@@ -28,13 +31,15 @@ export class KickGame {
       if (this.u >= 1.5) this.done = true;
     }
   }
+  // where the ball crosses the goal line (yards from centre) for a given aim angle, wind included
+  latFor(ang) { return Math.tan(ang * Math.PI / 180) * this.dist + this.drift; }
   tap() {
     if (this.stage === 'aim') { this.lockAng = this.ang; this.stage = 'power'; return 'aim'; }
     if (this.stage === 'power') {
       this.lockPow = this.power; this.stage = 'flight';
       this.range = this.lockPow * this.maxRange;
-      let lat = Math.tan(this.lockAng * Math.PI / 180) * this.dist + this.wind * this.dist * 0.012;
-      if (this.lockPow > 0.92) lat += (this.lockPow - 0.92) * 30 * (this.lockAng >= 0 ? 1 : -1);
+      let lat = this.latFor(this.lockAng);
+      if (this.lockPow > 0.97) lat += (this.lockPow - 0.97) * 25 * (this.lockAng >= 0 ? 1 : -1); // only a maxed-out kick hooks
       this.lateral = lat;
       const short = this.range < this.dist;
       this.good = !short && Math.abs(lat) <= 3.08;

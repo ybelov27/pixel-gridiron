@@ -12,8 +12,9 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 // Throw error model: lower accuracy -> wider angular and distance spread.
 export function throwError(rng, acc, d, bullet) {
-  const angSd = (11 - acc) * 0.9 * (bullet ? 1.3 : 1) * (1 + d / 60) * RAD;
-  const dSd = (11 - acc) * 0.25 * (1 + d / 40);
+  const miss = Math.max(0.25, 10.5 - acc);          // acc 10 -> 0.5, acc 8 -> 2.5, acc 3 -> 7.5
+  const angSd = miss * 0.5 * (bullet ? 1.2 : 1) * (1 + d / 80) * RAD;
+  const dSd = miss * 0.14 * (1 + d / 60);
   return { ang: rng.gauss() * angSd, d: rng.gauss() * dSd };
 }
 // ball flight: lob is slow and high, bullet fast and flat
@@ -166,7 +167,19 @@ export class PlaySim {
     if (!this.canThrow()) return false;
     this.setCarrier(this.QB, 'qb'); this.events.push('scramble'); return true;
   }
-  juke(dir) { const c = this.carrier; if (!c || c.cd2 > 0 || c.diveT > 0) return; c.jukeT = 0.3; c.jukeDir = dir; c.cd2 = 0.45; c.runT = (c.runT || 0) + 0.35; this.events.push('juke'); }
+  juke(dir) {
+    const c = this.carrier; if (!c || c.cd2 > 0 || c.diveT > 0) return;
+    c.jukeT = 0.28; c.jukeDir = dir; c.cd2 = 0.35; c.runT = (c.runT || 0) + 0.25; this.events.push('juke');
+    // a defender closing in can bite on the fake and stumble (but won't fall for it twice in a row)
+    const agility = eff(c.p, 'SPD');
+    for (const d of this.defs) {
+      if (d.stun > 0 || d.held || (d.role === 'DL' && d.engaged) || (d.fakedT || -9) > this.t - 1.5) continue;
+      const dd = dist(d, c), closing = (c.x - d.x) * d.vx + (c.y - d.y) * d.vy > 0;
+      if (dd < 2.6 && closing && this.rng.chance(clamp(0.4 + (agility - eff(d.p, 'TKL')) * 0.05 - this.diff.contest, 0.2, 0.75))) {
+        d.stun = 0.55; d.cd = 0.8; d.fakedT = this.t; this.events.push('miss');
+      }
+    }
+  }
   stutter() { const c = this.carrier; if (!c || c.cd2 > 0 || c.diveT > 0) return; c.slowT = 0.45; c.cd2 = 0.45; }
   dive() { const c = this.carrier; if (!c || c.diveT > 0) return; c.diveT = 0.35; c.diving = true; this.events.push('dive'); }
 
@@ -267,8 +280,13 @@ export class PlaySim {
       if (ny < 2 || ny > FW - 2) r.dir = { x: 1, y: 0 };
       this.moveTo(r, r.x + r.dir.x * 3, clamp(r.y + r.dir.y * 3, 1.5, FW - 1.5), r.spd, dt);
     } else {
-      // settled: drift slightly toward QB to present a target
-      this.moveTo(r, r.x, r.y + (this.QB.y - r.y) * 0.02, 1, dt);
+      // route finished: keep working into open space instead of standing still
+      let nd = null, best = 99;
+      for (const d of this.defs) { const dd = dist(d, r); if (dd < best) { best = dd; nd = d; } }
+      let tx = r.x, ty = r.y + (this.QB.y - r.y) * 0.05;
+      if (nd && best < 6) { const k = (6 - best) / 6; tx += (r.x - nd.x) / (best || 1) * 2 * k; ty += (r.y - nd.y) / (best || 1) * 2.5 * k; }
+      else ty += Math.sin(this.t * 2 + r.x) * 1.2;
+      this.moveTo(r, tx, clamp(ty, 2, FW - 2), 3.2, dt);
     }
   }
   cover(d, dt) {
@@ -319,13 +337,13 @@ export class PlaySim {
   }
   // stamina: full speed for a couple of seconds (longer with STA), then the runner fades
   staminaOf(c) {
-    const fresh = 1.6 + eff(c.p, 'STA') * 0.22;
-    return clamp(1 - Math.max(0, (c.runT || 0) - fresh) * 0.09 / 0.3, 0, 1);
+    const fresh = 3.2 + eff(c.p, 'STA') * 0.3;          // STA 5 -> ~4.7 s at full speed
+    return clamp(1 - Math.max(0, (c.runT || 0) - fresh) * 0.045 / 0.3, 0, 1);
   }
   runCarrier(c, dt) {
     c.runT = (c.runT || 0) + dt;
     c.stam = this.staminaOf(c);
-    const base = spdOf(eff(c.p, 'SPD')) * (0.7 + 0.3 * c.stam);
+    const base = spdOf(eff(c.p, 'SPD')) * (0.8 + 0.2 * c.stam);
     let vx = base, vy = 0;
     if (c.run && c.route && c.wp < 2) {
       // follow the run path through the line first
@@ -340,7 +358,7 @@ export class PlaySim {
       if (dx > -1 && dx < 5 && dd < 5 && d.stun <= 0) vy -= Math.sign(dy || 1) * base * 0.22 * (1 - dd / 5);
     }
     if (c.y < 2.5) vy += 1.5; if (c.y > FW - 2.5) vy -= 1.5;
-    if (c.jukeT > 0) { c.jukeT -= dt; vy = c.jukeDir * 9; vx = base * 0.6; }
+    if (c.jukeT > 0) { c.jukeT -= dt; vy = c.jukeDir * 10; vx = base * 0.85; }
     else if (c.slowT > 0) { c.slowT -= dt; vx = base * 0.35; vy = 0; }
     if (c.diveT > 0) {
       c.diveT -= dt; vx = 8; vy = 0;
@@ -409,16 +427,16 @@ export class PlaySim {
     const defs = this.defs.filter((d) => d.stun <= 0).map((d) => [d, dist(d, L)]).sort((a, b) => a[1] - b[1]);
     const [R, dR] = recs[0] || [null, 99], [Dd, dD] = defs[0] || [null, 99];
     const cat = R ? eff(R.p, 'CAT') : 0, cov = Dd ? eff(Dd.p, 'COV') : 0;
-    const rIn = R && dR <= 1.6 + cat * 0.04, dIn = Dd && dD <= 1.2 + cov * 0.03;
+    const rIn = R && dR <= 2.0 + cat * 0.05, dIn = Dd && dD <= 1.2 + cov * 0.03;
     const rng = this.rng;
     // pressure: 0 = wide open, 1 = blanketed
     const pressure = clamp((1.7 - dD) / 1.7, 0, 1);
     this.lastCatch = { dR, dD, rIn, dIn, pressure };
     if (outB) return this.incomplete('INCOMPLETE - OUT');
     if (rIn) {
-      const pCatch = clamp(0.82 - this.wx + cat * 0.024 - dR * 0.16 - Math.min(0.45, (b.err || 0) * 0.075) - pressure * (0.34 + this.diff.contest) - (b.bullet && b.T < 0.5 ? 0.05 : 0), 0.06, 0.97);
+      const pCatch = clamp(0.87 - this.wx + cat * 0.02 - dR * 0.1 - Math.min(0.4, (b.err || 0) * 0.08) - pressure * (0.3 + this.diff.contest) - (b.bullet && b.T < 0.5 ? 0.05 : 0), 0.06, 0.97);
       if (rng.chance(pCatch)) return this.catchBy(R);
-      if (pressure > 0.55 && rng.chance((pressure - 0.55) * 0.5 + cov * 0.006 + this.diff.contest * 0.3)) return this.intercept(Dd);
+      if (pressure > 0.6 && rng.chance((pressure - 0.6) * 0.45 + cov * 0.005 + this.diff.contest * 0.3)) return this.intercept(Dd);
       return this.incomplete(pressure > 0.35 ? 'BROKEN UP!' : 'DROPPED!', true);
     }
     if (dIn) {

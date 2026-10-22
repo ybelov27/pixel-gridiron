@@ -136,7 +136,7 @@ export class GameScene {
       if (g.kind === 'aim') { g.x = e.x; g.y = e.y; }
       else if (g.kind === 'swipe') {
         const dx = e.x - g.x0, dy = e.y - g.y0;
-        if (Math.hypot(dx, dy) > 12) { this.swipe(dx, dy); g.x0 = e.x; g.y0 = e.y; }
+        if (Math.hypot(dx, dy) > 9) { this.swipe(dx, dy); g.x0 = e.x; g.y0 = e.y; }
       }
     } else if (e.type === 'up' || e.type === 'cancel') {
       const g = this.g; if (!g || g.id !== e.id) return;
@@ -606,11 +606,6 @@ export class GameScene {
       if (!c.p.regular) { starIcon(x, y + 3, '#ffd23f'); x += 8; }
       const nm = `${c.p.pos} ${displayName(c.p)}`;
       big(nm, x, y + 3, '#fff', { shadow: false });
-      // stamina: drains while sprinting and juking; a tired runner gets caught
-      const st = c.stam ?? 1, sx2 = x + bigWidth(nm) + 8;
-      text('STAMINA', sx2, y + 4, '#9aa3cf');
-      rect(sx2 + 30, y + 3, 52, 7, '#0b0d1c'); rect(sx2 + 31, y + 4, 50, 5, '#1b2045');
-      rect(sx2 + 31, y + 4, Math.round(50 * st), 5, st > 0.6 ? '#3ccf6a' : st > 0.3 ? '#ffa300' : (Math.floor(this.t * 6) % 2 ? '#ff4d5e' : '#b81d2e'));
       const gy = Math.round(c.x - p.los);
       big(`${gy >= 0 ? '+' : ''}${gy} YDS`, W - 6 - G.SAFE.r, y + 3, gy >= 10 ? '#ffd23f' : '#fff', { align: 'right', shadow: false });
     } else text(tip, W / 2, y + 4, '#9aa3cf', 1, 'center');
@@ -694,7 +689,7 @@ export class GameScene {
     if (k.stage !== 'flight') {
       // aim marker sweeps across the uprights: where the ball would cross the goal line
       const ang = (k.stage === 'aim' ? k.ang : k.lockAng) * Math.PI / 180;
-      const latAt = Math.tan(ang) * k.dist + m.wind * k.dist * 0.012 * 0; // wind shown separately
+      const latAt = k.latFor(k.stage === 'aim' ? k.ang : k.lockAng); // wind included
       const gx = this.sx(120), gy = this.sy(cy + latAt);
       line(bx0, by0, gx, gy - 20, 'rgba(255,236,39,0.9)', 2);
       const lo = this.sy(cy - 3.08), hi = this.sy(cy + 3.08);
@@ -767,6 +762,11 @@ export class GameScene {
       const a = (k.stage === 'aim' ? k.ang : k.lockAng) * Math.PI / 180;
       for (let i = 6; i < 70; i += 3) rect(kx + Math.sin(a) * i - 1, ky - Math.cos(a) * i - 1, 3, 3, i > 60 ? '#ff9f1c' : '#ffec27');
       ballSprite(kx, ky - 1, 2);
+      // aim marker at the posts: where this kick would cross the goal line, wind included
+      const lat = k.latFor(k.stage === 'aim' ? k.ang : k.lockAng), mx2 = gx(lat, D), my2 = base - 6.5 * s;
+      const inside = Math.abs(lat) <= 3.08;
+      rect(mx2 - 3, my2 - 3, 7, 7, '#0b0d1c'); rect(mx2 - 2, my2 - 2, 5, 5, inside ? '#3ccf6a' : '#ff4d5e');
+      if (Math.abs(this.m.wind) > 0) line(W / 2 + Math.tan(((k.stage === 'aim' ? k.ang : k.lockAng) * Math.PI) / 180) * D * s, my2, mx2, my2, 'rgba(255,255,255,0.5)', 1);
       // power meter
       const mx = R - 16, my = top + 34, mh = H - my - 30 - G.SAFE.b;
       rect(mx - 1, my - 1, 12, mh + 2, '#0b0d1c'); rect(mx, my, 10, mh, '#1b2045');
