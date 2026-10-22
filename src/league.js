@@ -56,6 +56,8 @@ export function migrateCareer(c) {
   const rng = rngOf(c);
   if (!c.regulars) c.regulars = genRegulars(rng);
   c.music ||= { owned: ['fanfare'], equipped: 'fanfare' };
+  // older careers used invented clubs: rename them to the real team in the same slot (records and ratings stay)
+  c.teams.forEach((t, i) => { const d = TEAM_DATA[i]; Object.assign(t, { city: d[0], name: d[1], abbr: d[2], c1: d[3], c2: d[4] }); });
   const fix = (p) => { if (p && !p.trait && TRAITS[p.pos]) p.trait = rng.pick(TRAITS[p.pos])[0]; if (p && !p.celeb) p.celeb = rng.pick(CELEBS); };
   c.roster.forEach(fix);
   Object.values(c.regulars).flat().forEach((p) => { if (!p.celeb) p.celeb = rng.pick(CELEBS); }); (c.freeAgents || []).forEach(fix); (c.draft?.pool || []).forEach(fix);

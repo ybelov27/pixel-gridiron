@@ -1,7 +1,7 @@
 # Pixel Gridiron
 
 Pixel Gridiron is an original retro arcade-football and team-management game. It runs on HTML5 Canvas with plain JavaScript ES modules: no frameworks, no build step and no CDNs, so it works fully offline.
-The game recreates the loop of a classic mobile retro-football title. Everything in it is original: the name, the pixel art drawn in code, the bitmap font, the Web Audio sounds, and every team, city and player name.
+The game recreates the loop of a classic mobile retro-football title. The league uses the 32 real NFL teams with their cities and colors. Everything else is original: the name, the pixel art drawn in code (team badges included), the bitmap font, the Web Audio sounds, and every player and coach name.
 
 ## Play it
 
@@ -69,7 +69,7 @@ The play is chosen for you. Before the snap, each receiver's route is drawn as a
 - **Ratings:** every player has an overall rating (OVR, 40–99). It shows over skill players and defenders on the field, and in the roster, player cards, free agency and the draft.
 - **On field:** 11 v 11 side-scrolling field. Routes, man and deep-zone coverage with reaction lag, a pass rush against your OL, sacks, catches, drops, deflections and interceptions. When a pass is in the air, every nearby receiver and defender breaks toward the landing spot. Also playable kickoff returns, hand-offs, jukes, stutters, dives, broken tackles, fumbles, safeties, out of bounds, 26 auto-selected plays, a FG/PAT aim and power mini-game with wind, punts, kickoffs, onside kicks, 2-point tries and 4th-down decisions. Opponent drives are simulated as a ticker.
 - **Rules:** selectable 1/2/3-minute quarters, a clock that stops on incompletions, out of bounds, scores and turnovers, a 6-second runoff between plays, 3 timeouts per half, and OT (see Known deviations).
-- **Management:** 32 fictional teams in 2 conferences of 4 divisions each, a 16-game season, and a 12-team playoff ending in the Pixel Bowl. Your roster holds up to 12 star players, each with 4 position attributes, a star rating and potential, XP and skill points, morale, condition, injuries, contracts, and season and career stats. You earn coaching credits and spend them on Stadium, Training and Rehab upgrades (which decay each offseason), OC/DC hires, meetings, rest, extensions, free agents and cap raises. There's a $200M salary cap, a 3-round draft with scouting fuzz, free agency, re-signing, trades and releases, press conferences and events, an owner job-security meter with firing and new job offers, and Easy/Medium/Hard/Extreme difficulty plus an optional dynamic difficulty.
+- **Management:** the 32 NFL teams in their real AFC/NFC divisions, a 16-game season, and a 12-team playoff ending in the Pixel Bowl. Your roster holds up to 12 star players, each with 4 position attributes, a star rating and potential, XP and skill points, morale, condition, injuries, contracts, and season and career stats. You earn coaching credits and spend them on Stadium, Training and Rehab upgrades (which decay each offseason), OC/DC hires, meetings, rest, extensions, free agents and cap raises. There's a $200M salary cap, a 3-round draft with scouting fuzz, free agency, re-signing, trades and releases, press conferences and events, an owner job-security meter with firing and new job offers, and Easy/Medium/Hard/Extreme difficulty plus an optional dynamic difficulty.
 
 See [RESEARCH.md](RESEARCH.md) for the design rules and every ASSUMED number.
 

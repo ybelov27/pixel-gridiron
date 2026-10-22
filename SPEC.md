@@ -53,7 +53,7 @@ Rules & clock:
 - HUD: score, quarter, clock, down & distance, ball position, timeouts (3/half).
 
 ## Front office / management
-- 32 fictional teams in 2 conferences / 4 divisions each. Pick or randomize team.
+- The 32 NFL teams in their real AFC/NFC North/South/East/West divisions. Pick or randomize team.
 - Season: regular season + playoff bracket → championship game ("Pixel Bowl").
 - Star players: max ~12 on roster. Unfilled positions are generic 1-star-ish "regular" players. Positions: QB, RB, WR, TE, OL, K, DL, LB, DB.
 - Each star: name, age, position, star rating (0.5–5), potential stars, 4 position-specific attributes (e.g. QB: Accuracy, Arm, Speed, Stamina), XP/level-ups (spend points on attributes), salary, contract years, Morale, Condition (fatigue), injury status/weeks out, season & career stats.
