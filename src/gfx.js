@@ -35,13 +35,12 @@ function resize() {
   if (!PORTRAIT && (w < BW || h < BH)) { s = Math.max(1, s - 1); w = Math.floor(dw / s); h = Math.floor(dh / s); }
   w = Math.max(BW, Math.min(PORTRAIT ? 2000 : MAX_W, w)); h = Math.max(PORTRAIT ? 1 : BH, Math.min(PORTRAIT ? 2000 : MAX_H, h));
   SCALE = s;
-  // the canvas is backed at full device resolution; drawing code keeps using logical W x H coordinates
-  const dw2 = Math.round(w * s), dh2 = Math.round(h * s);
-  if (canvas.width !== dw2 || canvas.height !== dh2) { canvas.width = dw2; canvas.height = dh2; }
+  // classic crisp pixels: draw at the logical resolution and let CSS scale it up by an integer factor
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
   W = w; H = h;
-  HI = s >= 4 ? 4 : s >= 2 ? 2 : 1;
+  HI = 1; // Scale2x smoothing switched off (the chunky pixel look reads better)
   ctx = canvas.getContext('2d');
-  if (ctx.setTransform) ctx.setTransform(s, 0, 0, s, 0, 0);
+  if (ctx.setTransform) ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.imageSmoothingEnabled = false;
   canvas.style.width = (w * s / dpr) + 'px';
   canvas.style.height = (h * s / dpr) + 'px';
@@ -337,6 +336,22 @@ export function helmet(x, y, primary, secondary, scale = 2, facing = 1) {
   let c = spriteCache.get(key);
   if (!c) { c = buildSprite(HELMET, { h: primary, s: secondary, l: secondary, m: '#d8d8d8' }, facing); spriteCache.set(key, c); }
   ctx.drawImage(hi(c), Math.round(x), Math.round(y), c.width * scale, c.height * scale);
+}
+// cheerleader (front-facing): r hair, f skin, t top, k skirt, o pom-pom, l legs, b shoes, a arm
+const CHEER = [
+  ['..rrr..', '..fff..', 'o.ttt.o', 'oatttao', '..ttt..', '.kkkkk.', '..l.l..', '..l.l..', '..b.b..'],
+  ['o.rrr.o', 'oafffao', '.attta.', '..ttt..', '..ttt..', '.kkkkk.', '..l.l..', '.l...l.', '.b...b.'],
+];
+const HAIR = ['#f2d16b', '#7a4a1f', '#2b1a10', '#c0462f'];
+export function cheerSprite(top, skirt, frame, hair = 0, skin = 0) {
+  const key = 'cheer' + top + skirt + frame + hair + skin;
+  let c = spriteCache.get(key);
+  if (!c) {
+    const pom = lum(skirt) > 200 ? '#ffd23f' : skirt;
+    c = buildSprite(CHEER[frame % 2], { r: HAIR[hair % 4], f: SKINS[skin % 4], a: SKINS[skin % 4], t: top, k: skirt, o: pom, l: SKINS[skin % 4], b: '#f4f4f4' }, 1);
+    spriteCache.set(key, c);
+  }
+  return c;
 }
 const BALL = [['.bbb.', 'bwbwb', '.bbb.'], ['.bbb.', 'bbwbb', '.bbb.'], ['..b..', '.bwb.', '..b..']];
 export function ballSprite(x, y, frame = 0) {

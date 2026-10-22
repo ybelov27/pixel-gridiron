@@ -4,7 +4,7 @@ import { ROUTES } from './playbook.js';
 import { eff } from './players.js';
 
 export const FW = 53.33;
-export const spdOf = (v) => 6.0 + v * 0.32;
+export const spdOf = (v) => 4.3 + v * 0.5;   // SPD 2 ~5.3 yd/s (lineman), 5 ~6.8, 8 ~8.3, 10 ~9.3
 // arm strength sets how far a QB can throw (weak ~28 yd, average ~38, elite ~58) and how fast the ball gets there
 export const maxThrow = (arm) => 18 + arm * 4;
 const RAD = Math.PI / 180;
@@ -31,7 +31,8 @@ function bodyOf(e, role) {
 }
 export function makeDefender(rating, i, rng) {
   const a = (k) => clamp(Math.round(rating * 2 + rng.gauss() * 1.2), 1, 10);
-  return { regular: true, id: null, pos: 'D', attrs: { SPD: a(), TKL: a(), COV: a(), RSH: a(), STR: a() }, condition: 100, morale: 70, stars: rating, skin: i % 4 };
+  const spd = clamp(Math.round(rating * 1.7 + rng.gauss() * 1.2), 1, 10); // average defenders are average-speed
+  return { regular: true, id: null, pos: 'D', attrs: { SPD: spd, TKL: a(), COV: a(), RSH: a(), STR: a() }, condition: 100, morale: 70, stars: rating, skin: i % 4 };
 }
 
 export class PlaySim {
@@ -238,7 +239,7 @@ export class PlaySim {
     for (const d of this.defs) {
       if (d.stun > 0) { d.stun -= dt; d.vx = d.vy = 0; continue; }
       if (d.role === 'DL' && d.engaged) continue;
-      if (this.carrier && this.t >= (d.pursueAt ?? 0)) { this.pursue(d, this.carrier, dt); continue; }
+      if (this.carrier && this.t >= (d.pursueAt ?? 0)) { this.pursueLane(d, this.carrier, dt); continue; }
       if (this.ball.state === 'air' && d.toBallAt !== undefined && this.t >= d.toBallAt) { this.moveTo(d, this.ball.x1, this.ball.y1, d.spd * 0.9, dt); continue; }
       if (d.role === 'DL' || d.rush) {
         if (d.rush && this.t < d.hold) { this.moveTo(d, this.los + 1, d.y, 2, dt); continue; }
@@ -277,14 +278,14 @@ export class PlaySim {
   }
   // bodies don't pass through each other; defenders running into blockers get slowed
   separate() {
-    const E = this.ents, n = E.length, R = 0.62;
+    const E = this.ents, n = E.length;
     for (let i = 0; i < n; i++) {
       const a = E[i]; if (a.down) continue;
       for (let j = i + 1; j < n; j++) {
         const b = E[j]; if (b.down) continue;
         if (a === this.carrier || b === this.carrier || a === this.returner || b === this.returner) continue; // tackles handle the ball carrier
         if ((a.ol === b && a.engaged) || (b.ol === a && b.engaged) || a.target === b || b.target === a) continue;
-        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), R = a.side === b.side && !a.engaged && !b.engaged ? 0.9 : 0.62;
         if (d >= R || d < 1e-6) continue;
         const ma = a.mass || 1, mb = b.mass || 1, push = R - d, nx = dx / d, ny = dy / d;
         a.x -= nx * push * mb / (ma + mb); a.y -= ny * push * mb / (ma + mb);
@@ -343,6 +344,24 @@ export class PlaySim {
       const tx = this.los + (d.role === 'LB' ? 5 : 8);
       this.moveTo(d, tx, d.y + (qb.y - d.y) * 0.5, d.spd * 0.6, dt);
     }
+  }
+  // team pursuit: the closest few attack the ball, the rest keep their lanes and close gradually,
+  // deep safeties stay in front as the last line - no 11-man swarm
+  pursueLane(d, c, dt) {
+    if (!this._rankT || this._rankT !== this.t) {
+      this._rankT = this.t;
+      const free = this.defs.filter((x) => x.stun <= 0 && !x.held).sort((a, b) => dist(a, c) - dist(b, c));
+      free.forEach((x, i) => { x.rank = i; });
+    }
+    if (d.lane === undefined) d.lane = d.y;
+    const dd = dist(d, c);
+    if ((d.rank ?? 0) < 3 || dd < 4) return this.pursue(d, c, dt);
+    const lead = clamp(dd / d.spd * 1.15, 0, 1.6);
+    let tx = c.x + c.vx * lead, ty = c.y + c.vy * lead;
+    const keep = clamp((dd - 4) / 14, 0, 0.7);            // far away: hold the lane; close: converge
+    ty += (d.lane - ty) * keep;
+    if (d.role === 'S' || d.role === 'CB') tx = Math.max(tx, c.x + Math.min(10, dd * 0.6)); // stay in front
+    this.moveTo(d, tx, clamp(ty, 1, FW - 1), d.spd, dt);
   }
   pursue(d, c, dt, mult = 1) {
     const dd = dist(d, c);
@@ -648,7 +667,7 @@ export class PlaySim {
       if (d.stun > 0) { d.stun -= dt; if (!d.held) { d.vx = d.vy = 0; } continue; }
       const tgt = this.carrier || kr;
       if (Math.abs(d.x - tgt.x) > 18) this.moveTo(d, tgt.x, d.lane + (tgt.y - d.lane) * 0.35, d.spd, dt);
-      else this.pursue(d, tgt, dt);
+      else this.pursueLane(d, tgt, dt);
     }
     for (const e of this.ents) { if (e.cd > 0) e.cd -= dt; if (e.cd2 > 0) e.cd2 -= dt; }
     this.separate();

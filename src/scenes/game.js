@@ -46,7 +46,11 @@ export class GameScene {
     // camera
     let target = this.camX;
     const p = m.play;
-    if (m.phase === 'kick' && m.kick && m.kick.kind === 'pat') target = 108;
+    if (m.phase === 'kick' && m.kick) {
+      // side-on kick: frame the kicker, then follow the ball to the posts
+      const k = m.kick, spot = 120 - k.dist;
+      target = k.stage === 'flight' ? Math.min(124, spot + Math.min(k.range, k.dist * 1.15) * Math.min(1, k.u) + 4) : Math.max(spot + this.half * 0.75, Math.min(108, (spot + 120) / 2));
+    }
     else if (m.phase === 'opp') target = 10 + (100 - m.oppMarker());
     else if (p && (m.phase === 'live' || m.phase === 'msg')) {
       if (p.ball.state === 'air') target = p.ball.x + (p.ball.x1 - p.ball.x) * 0.4 + 4;   // look toward where it will land
@@ -214,8 +218,7 @@ export class GameScene {
     this.shx = this.shake > 0 ? Math.round((Math.random() - 0.5) * 4) : 0;
     this.shy = this.shake > 0 ? Math.round((Math.random() - 0.5) * 3) : 0;
     rect(0, 0, W, H, '#0b0d1c');
-    if (m.phase === 'kick' && m.kick.kind === 'pat') { this.drawStands(); this.drawField(); this.drawKickSide(); this.drawHUD(); this.drawParts(); return; }
-    if (m.phase === 'kick') { this.drawKick(); this.drawHUD(); this.drawParts(); return; }
+    if (m.phase === 'kick') { this.drawStands(); this.drawField(); this.drawKickSide(); this.drawHUD(); this.drawParts(); return; }
     this.drawStands();
     this.drawField();
     const p = m.play;
@@ -283,14 +286,25 @@ export class GameScene {
       if (s1 < 0 || s0 > W) continue;
       const dark = shadeColor(t.c1, 0.7);
       for (let y = FT; y < fb; y += 8) for (let x = s0; x < s1; x += 8) if (((x - s0) / 8 + (y - FT) / 8) % 2 === 0) rect(x, y, 8, 8, dark);
-      const ctx = G.ctx; ctx.save(); ctx.translate(Math.round((s0 + s1) / 2), Math.round((FT + fb) / 2)); ctx.rotate(rot * Math.PI / 2);
-      const sc = bigWidth(t.name, 2) < FW * SY - 16 ? 2 : 1;
+      // team logo badges at both ends of the end zone, name in between
+      const cx = Math.round((s0 + s1) / 2);
+      for (const by of [FT + 5, fb - 31]) {
+        rect(cx - 19, by - 1, 38, 28, '#0b0d1c'); rect(cx - 18, by, 36, 26, t.c2 === '#111111' ? '#444' : t.c2); rect(cx - 16, by + 2, 32, 22, shadeColor(t.c1, 0.45));
+        G.helmet(cx - 16, by + 1, t.c1, t.c2, 2, -rot);
+      }
+      const ctx = G.ctx; ctx.save(); ctx.translate(cx, Math.round((FT + fb) / 2)); ctx.rotate(rot * Math.PI / 2);
+      const room = FW * SY - 76;
+      const sc = bigWidth(t.name, 2) <= room ? 2 : 1;
       big(t.name, 0, -Math.round(3.5 * sc), t.c2 === '#111111' ? '#fff' : t.c2, { align: 'center', scale: sc });
       ctx.restore();
     }
     // midfield badge
     const mx = this.sx(60);
-    if (mx > -40 && mx < W + 40) big(this.home().abbr, mx + 1, Math.round((FT + fb) / 2) - 7, 'rgba(255,255,255,0.22)', { align: 'center', scale: 2, outline: null, shadow: false });
+    if (mx > -40 && mx < W + 40) {
+      const hm = this.home(), ctx2 = G.ctx, my = Math.round((FT + fb) / 2);
+      ctx2.globalAlpha = 0.4; G.helmet(mx - 23, my - 26, hm.c1, hm.c2, 3, 1); ctx2.globalAlpha = 1;
+      big(hm.abbr, mx + 1, my + 13, 'rgba(255,255,255,0.3)', { align: 'center', outline: null, shadow: false });
+    }
     // lines
     for (let yd = Math.max(0, x0); yd <= Math.min(120, x1); yd++) {
       const sx = this.sx(yd);
@@ -315,6 +329,16 @@ export class GameScene {
       const bob = this.hype > 0 && t === m.me ? Math.round(Math.max(0, Math.sin(this.t * 14 + yd))) * 2 : 0;
       rect(bx, fb + 2 - bob, 2, 1, t.c2 === '#111111' ? '#444' : t.c2);   // helmet stripe / cap
       rect(bx, fb + 3 - bob, 2, 3, h % 5 === 0 ? '#e9e9e9' : t.c1);     // jersey (some in warmups)
+    }
+    // cheerleaders on the far sideline near both end zones: sway between plays, jump on big plays
+    const hm = this.home();
+    for (const [a0, a1] of [[13, 27], [93, 107]]) for (let yd = a0, i = 0; yd <= a1; yd += 2.3, i++) {
+      const cx2 = this.sx(yd); if (cx2 < -6 || cx2 > W + 6) continue;
+      const hype = this.hype > 0;
+      const fr = hype ? Math.floor(this.t * 6 + i) % 2 : Math.floor(this.t * 1.5 + i * 0.7) % 2;
+      const jump = hype ? Math.round(Math.abs(Math.sin(this.t * 9 + i))) * 3 : 0;
+      const img = G.cheerSprite(hm.c1, hm.c2 === '#111111' ? '#e0e0e0' : hm.c2, fr, i, i * 3);
+      drawSprite(img, cx2 - 4, FT + 1 - img.height - jump);
     }
     // end-zone pylons on all four goal-line / end-line corners
     for (const px2 of [0, 10, 110, 120]) for (const py2 of [0, FW]) {
@@ -734,7 +758,7 @@ export class GameScene {
     text('KEYS: SPACE SNAP  H HANDOFF  WASD / ARROWS', W / 2, y + 132, '#9aa3cf', 1, 'center');
     text('B BULLET  T TIMEOUT  ESC PAUSE', W / 2, y + 141, '#9aa3cf', 1, 'center');
   }
-  // side-on view for the extra point: same aim + power taps, played out on the normal field
+  // side-on view for field goals and extra points: aim + power taps, played out on the normal field
   drawKickSide() {
     const m = this.m, k = m.kick, W = G.W, H = G.H;
     const spotX = 120 - k.dist, cy = FW / 2, face = 1;
@@ -759,8 +783,16 @@ export class GameScene {
       // aim marker sweeps across the uprights: where the ball would cross the goal line
       const ang = (k.stage === 'aim' ? k.ang : k.lockAng) * Math.PI / 180;
       const latAt = k.latFor(k.stage === 'aim' ? k.ang : k.lockAng); // wind included
-      const gx = this.sx(120), gy = this.sy(cy + latAt);
+      const W = G.W;
+      let gx = this.sx(120);
+      const gy = this.sy(cy + latAt), offscreen = gx > W - 14;
+      if (offscreen) gx = W - 14;
       line(bx0, by0, gx, gy - 20, 'rgba(255,236,39,0.9)', 2);
+      if (offscreen) { // the posts are further downfield: show the aim against them at the edge
+        const lo2 = this.sy(cy - 3.08), hi2 = this.sy(cy + 3.08);
+        rect(gx - 1, lo2 - 22, 3, hi2 - lo2 + 4, '#0b0d1c'); rect(gx, lo2 - 21, 1, hi2 - lo2 + 2, '#ffd23f');
+        text('POSTS', gx - 2, lo2 - 30, '#ffd23f', 1, 'right'); text('>', gx + 5, gy - 22, '#fff');
+      }
       const lo = this.sy(cy - 3.08), hi = this.sy(cy + 3.08);
       rect(gx - 5, lo - 20, 2, hi - lo, 'rgba(255,255,255,0.25)');
       rect(gx - 7, gy - 21, 5, 3, '#0b0d1c'); rect(gx - 6, gy - 20, 3, 1, Math.abs(latAt) <= 3.08 ? '#3ccf6a' : '#ff4d5e');
@@ -785,75 +817,6 @@ export class GameScene {
     }
     // wind
     text(`WIND ${Math.abs(m.wind)} MPH ${m.wind < 0 ? '<' : m.wind > 0 ? '>' : ''}`, 6 + G.SAFE.l, this.FT + 4, '#fff');
-  }
-  // behind-the-kicker view for field goals
-  drawKick() {
-    const m = this.m, k = m.kick, W = G.W, H = G.H;
-    const top = this.top + HUD_H, HZ = top + Math.round((H - top) * 0.3), F = (H - HZ) * 3.6, CZ = 4.2;
-    const gy = (z) => HZ + F / (z + CZ), sc = (z) => (H - HZ) * 1.9 / (z + CZ), gx = (x, z) => W / 2 + x * sc(z);
-    // sky + stands
-    const sky = m.night ? ['#070820', '#0c0e2e', '#121540'] : ['#4aa3df', '#6bb8e8', '#8fcbee'];
-    const sh = HZ - top;
-    sky.forEach((c, i) => rect(0, top + Math.floor(sh * i / 6), W, Math.ceil(sh / 6) + 1, c));
-    rect(0, top + Math.floor(sh / 2), W, Math.ceil(sh / 2), m.night ? '#0e1030' : '#262a52');
-    for (let r = 0; r < 4; r++) for (let x = 0; x < W; x += 3) {
-      const hsh = (x * 2654435761 + r * 131) >>> 0; if (hsh % 5 === 0) continue;
-      rect(x, top + Math.floor(sh / 2) + 2 + r * 3, 2, 2, CROWD[hsh % CROWD.length]);
-    }
-    rect(0, HZ - 3, W, 3, m.me.c1);
-    // field in perspective
-    for (let z = -4; z < 140; z += 5) {
-      const y0 = gy(z + 5), y1 = gy(z);
-      rect(0, Math.floor(y0), W, Math.ceil(y1 - y0) + 1, Math.floor((z + 100) / 5) % 2 ? GREEN[0] : GREEN[1]);
-      if (y1 < H) rect(0, Math.round(y1), W, 1, 'rgba(255,255,255,0.4)');
-    }
-    for (const sx2 of [-26.6, 26.6]) line(gx(sx2, 0), gy(0), gx(sx2, 120), gy(120), 'rgba(255,255,255,0.7)');
-    // posts
-    const D = k.dist, base = gy(D), s = sc(D), hw = 3.08 * s;
-    rect(W / 2 + 2, base, Math.max(3, s * 1.2), 2, 'rgba(0,0,0,0.25)');
-    rect(W / 2 - 1, base - 3.33 * s, 2, 3.33 * s, '#ffd23f');
-    rect(W / 2 - hw, base - 3.33 * s, hw * 2 + 2, 2, '#ffd23f');
-    rect(W / 2 - hw, base - 10 * s, 2, 6.67 * s, '#ffd23f'); rect(W / 2 + hw, base - 10 * s, 2, 6.67 * s, '#ffd23f');
-    // wind + info
-    const L = 6 + G.SAFE.l, R = W - 6 - G.SAFE.r;
-    panel(L - 2, top + 3, 98, 16);
-    big(`WIND ${Math.abs(m.wind)}`, L + 2, top + 7, '#fff', { shadow: false });
-    const ax = L + 70, ay = top + 10, dir = Math.sign(m.wind);
-    if (dir) { line(ax - 8, ay, ax + 8, ay, '#ffd23f'); line(ax + 8 * dir, ay, ax + 5 * dir, ay - 3, '#ffd23f'); line(ax + 8 * dir, ay, ax + 5 * dir, ay + 3, '#ffd23f'); }
-    else text('CALM', ax - 6, ay - 2, '#ffd23f');
-    panel(R - 128, top + 3, 130, 16);
-    big(`${k.kind === 'pat' ? 'PAT' : 'FG'} ${D} YDS`, R - 124, top + 7, '#fff', { shadow: false });
-    text(`MAX ~${Math.round(k.maxRange)}`, R - 4, top + 8, '#9aa3cf', 1, 'right');
-    // kicker + ball
-    const kx = W / 2, ky = H - 20 - G.SAFE.b;
-    drawSprite(playerSprite(m.me.c1, m.me.c2, k.stage === 'flight' ? 1 : 0, 1, 0), kx - 20, ky - 14);
-    if (k.stage !== 'flight') {
-      const a = (k.stage === 'aim' ? k.ang : k.lockAng) * Math.PI / 180;
-      for (let i = 6; i < 70; i += 3) rect(kx + Math.sin(a) * i - 1, ky - Math.cos(a) * i - 1, 3, 3, i > 60 ? '#ff9f1c' : '#ffec27');
-      ballSprite(kx, ky - 1, 2);
-      // aim marker at the posts: where this kick would cross the goal line, wind included
-      const lat = k.latFor(k.stage === 'aim' ? k.ang : k.lockAng), mx2 = gx(lat, D), my2 = base - 6.5 * s;
-      const inside = Math.abs(lat) <= 3.08;
-      rect(mx2 - 3, my2 - 3, 7, 7, '#0b0d1c'); rect(mx2 - 2, my2 - 2, 5, 5, inside ? '#3ccf6a' : '#ff4d5e');
-      if (Math.abs(this.m.wind) > 0) line(W / 2 + Math.tan(((k.stage === 'aim' ? k.ang : k.lockAng) * Math.PI) / 180) * D * s, my2, mx2, my2, 'rgba(255,255,255,0.5)', 1);
-      // power meter
-      const mx = R - 16, my = top + 34, mh = H - my - 30 - G.SAFE.b;
-      rect(mx - 1, my - 1, 12, mh + 2, '#0b0d1c'); rect(mx, my, 10, mh, '#1b2045');
-      const need = Math.min(1, D / k.maxRange);
-      rect(mx - 4, my + mh - need * mh, 18, 2, '#ff4d5e');
-      if (k.stage === 'power') rect(mx + 1, my + mh - k.power * mh, 8, k.power * mh, k.power > 0.92 ? '#ff9f1c' : '#3ccf6a');
-      big(k.stage === 'aim' ? 'TAP TO AIM' : 'TAP FOR POWER', W / 2, ky - 92 < base + 6 ? base + 8 : ky - 92, '#fff', { align: 'center' });
-    } else {
-      const u = Math.min(1.2, k.u);
-      const z = Math.min(k.range, D * 1.15) * u, lat = k.lateral * (z / D);
-      const peak = 12 * Math.min(1, k.range / D);
-      const fh = Math.max(0, 4 * peak * (u * 0.9) * (1 - u * 0.9));
-      const bxp = gx(lat, z), byp = gy(z) - fh * sc(z);
-      rect(gx(lat, z) - 1, gy(z), 3, 1, 'rgba(0,0,0,0.4)');
-      const bs = Math.max(1, Math.round(sc(z) / 3));
-      rect(bxp - bs, byp - bs, bs * 2 + 1, bs * 2, '#8b4a1c');
-      if (k.u > 1) this.banner(k.good ? "IT'S GOOD!" : k.why);
-    }
   }
 }
 // small direction chevron (">" pointing along ux,uy)
