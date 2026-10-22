@@ -55,7 +55,7 @@ The play is chosen for you. Before the snap, each receiver's route is drawn as a
 - **Difficulty pays:** coaching credits and XP scale with difficulty: Easy ×0.75 / ×0.9, Medium ×1, Hard ×1.5 / ×1.15, Extreme ×2 / ×1.3.
 - **Touchdown music store:** Front Office → STORE sells original chiptune touchdown songs for CC. Preview, buy and equip one, and it plays on every touchdown.
 - **Fantasy draft start:** on New Career, set STAR ROSTER to DRAFT THEM to pick your stars round by round (10 rounds, real ratings and skills) before season 1, or choose RANDOM to be handed a squad.
-- **Stamina:** ball carriers run at full speed for a couple of seconds (longer with high STAMINA), then fade, so defenders can run them down. Jukes cost stamina. A stamina bar shows for the ball carrier, and every carry wears a player's condition down over the game.
+- **Stamina:** ball carriers keep full speed for about 7 seconds (longer with high STAMINA), then fade slightly (never below 90%), so only very long runs sag. Every carry wears a player's condition down over the game.
 - **Interceptions:** contested and badly placed throws can be picked off. The defender returns it live while your players chase him, and a pick-six is possible.
 - **Skills:** every star has a signature skill (CANNON, SNIPER, BURNER, SURE HANDS, BULLDOZER, BALL HAWK, BIG LEG…) that boosts one attribute, shown on the player card. Non-star depth players are real named individuals with their own ratings.
 - **Arm strength matters:** a weak-armed QB tops out around 28 yards, an average arm around 38, and an elite arm about 58 (CANNON adds more).

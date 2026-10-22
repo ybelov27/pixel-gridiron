@@ -187,7 +187,7 @@ export class PlaySim {
       }
     }
   }
-  stutter() { const c = this.carrier; if (!c || c.cd2 > 0 || c.diveT > 0) return; c.slowT = 0.45; c.cd2 = 0.45; }
+  stutter() { const c = this.carrier; if (!c || c.cd2 > 0 || c.diveT > 0) return; c.slowT = 0.3; c.cd2 = 0.4; }
   dive() { const c = this.carrier; if (!c || c.diveT > 0) return; c.diveT = 0.35; c.diving = true; this.events.push('dive'); }
 
   setCarrier(e, kind) {
@@ -346,7 +346,7 @@ export class PlaySim {
   }
   pursue(d, c, dt, mult = 1) {
     const dd = dist(d, c);
-    const lead = clamp(dd / d.spd, 0, 1.1);
+    const lead = clamp(dd / d.spd * 1.15, 0, 1.6); // take an angle: aim where the runner will be
     this.moveTo(d, c.x + c.vx * lead, c.y + c.vy * lead, d.spd * mult, dt);
   }
   lineUpdate(d, dt) {
@@ -369,19 +369,22 @@ export class PlaySim {
   }
   // stamina: full speed for a couple of seconds (longer with STA), then the runner fades
   staminaOf(c) {
-    const fresh = 3.2 + eff(c.p, 'STA') * 0.3;          // STA 5 -> ~4.7 s at full speed
-    return clamp(1 - Math.max(0, (c.runT || 0) - fresh) * 0.045 / 0.3, 0, 1);
+    const fresh = 5 + eff(c.p, 'STA') * 0.4;            // STA 5 -> ~7 s at full speed
+    return clamp(1 - Math.max(0, (c.runT || 0) - fresh) * 0.07, 0, 1);
   }
   runCarrier(c, dt) {
     c.runT = (c.runT || 0) + dt;
     c.stam = this.staminaOf(c);
-    const base = spdOf(eff(c.p, 'SPD')) * (0.8 + 0.2 * c.stam);
+    const base = spdOf(eff(c.p, 'SPD')) * (0.9 + 0.1 * c.stam);
     let vx = base, vy = 0;
     if (c.run && c.route && c.wp < 2) {
       // follow the run path through the line first
       const p = c.route[c.wp];
-      this.moveTo(c, p.x, p.y, base, dt);
-      if (Math.hypot(p.x - c.x, p.y - c.y) < 0.6) c.wp++;
+      const dx = p.x - c.x, dy = p.y - c.y, d = Math.hypot(dx, dy) || 1;
+      const k = Math.min(1, dt * 7);
+      c.vx += (dx / d * base - c.vx) * k; c.vy += (dy / d * base - c.vy) * k;
+      c.x += c.vx * dt; c.y += c.vy * dt;
+      if (d < 1.2 || c.x >= p.x + 0.2) c.wp++;
       return this.boundsCheck(c);
     }
     // gentle auto-avoidance; the user does the real jukes
@@ -391,13 +394,18 @@ export class PlaySim {
     }
     if (c.y < 2.5) vy += 1.5; if (c.y > FW - 2.5) vy -= 1.5;
     if (c.jukeT > 0) { c.jukeT -= dt; vy = c.jukeDir * 10; vx = base * 0.85; }
-    else if (c.slowT > 0) { c.slowT -= dt; vx = base * 0.35; vy = 0; }
+    else if (c.slowT > 0) { c.slowT -= dt; vx = base * 0.6; vy = 0; }
     if (c.diveT > 0) {
       c.diveT -= dt; vx = 8; vy = 0;
       if (c.diveT <= 0) { c.down = true; return this.end({ kind: 'tackle', x: c.x, y: c.y, msg: 'DIVE!' }); }
     }
     const k = c.jukeT > 0 || c.diveT > 0 ? 1 : Math.min(1, dt * 6);
     c.vx += (vx - c.vx) * k; c.vy += (vy - c.vy) * k;
+    // runners carry their speed through cuts: blending directions must not bleed off pace
+    if (!(c.slowT > 0)) {
+      const want = Math.hypot(vx, vy) * 0.98, have = Math.hypot(c.vx, c.vy);
+      if (have > 0.5 && have < want) { c.vx *= want / have; c.vy *= want / have; }
+    }
     c.x += c.vx * dt; c.y += c.vy * dt;
     this.boundsCheck(c);
   }

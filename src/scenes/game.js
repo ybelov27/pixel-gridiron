@@ -155,7 +155,8 @@ export class GameScene {
   }
   swipe(dx, dy) {
     const p = this.m.play; if (!p || !p.carrier) return;
-    if (Math.abs(dy) > Math.abs(dx)) p.juke(dy < 0 ? -1 : 1);
+    // diagonal swipes count as jukes; only a clearly forward / backward swipe dives or stutters
+    if (Math.abs(dy) * 1.5 >= Math.abs(dx)) p.juke(dy < 0 ? -1 : 1);
     else if (dx > 0) p.dive(); else p.stutter();
   }
   key(e) {
