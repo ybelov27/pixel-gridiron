@@ -451,6 +451,7 @@ export class PlaySim {
       let pMiss = 0.17 + (cs - ct) * 0.045 - this.diff.contest * 0.5;
       if (c.jukeT > 0) pMiss += 0.42 + eff(c.p, 'SPD') * 0.02;
       if (armTackle) pMiss += 0.25;
+      if (this.carrierKind === 'rec' || this.carrierKind === 'kr') pMiss += 0.06 + eff(c.p, 'SPD') * 0.008; // open-field runners are slippery
       if (c.diving) pMiss = 0;
       pMiss = clamp(pMiss, c.diving ? 0 : 0.03, 0.8);
       if (this.rng.chance(pMiss)) { d.stun = 0.7; d.cd = 1; this.events.push('miss'); continue; }

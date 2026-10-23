@@ -54,6 +54,7 @@ The play is chosen for you. Before the snap, each receiver's route is drawn as a
 - **No popping in:** between plays, players walk from where they finished to their new spots. The game uses crisp, integer-scaled pixels throughout.
 - **Stadium:** team logo badges in both end zones and at midfield, plus cheerleaders on the far sideline who jump on big plays.
 - **Speed:** speed comes from each player's rating. Linemen and slow players are clearly slow (~5.8 yd/s), average players ~7.4, and only real burners hit ~10 yd/s.
+- **Motion blur:** a ball carrier at full speed and passes or kicks in flight leave a faint pixel afterimage (toggle BLUR in the pause menu). Receivers who make the catch are slippery in the open field and break more tackles.
 - **Team pursuit:** the closest defenders attack the ball carrier while the rest keep their pursuit lanes and safeties stay in front, so the defense no longer swarms in one blob.
 - **Achievements:** 33 trophies (big plays, games, seasons and career milestones), each paying coaching credits. Big-play ones unlock live mid-game with a gold banner. See them under HISTORY → TROPHIES.
 - **Performance:** the static field (turf, lines, numbers, end zones, logos, posts), pre-snap routes, the idle crowd, every text string, stars and icons are baked into cached images. That's ~90% fewer canvas calls per frame (about 2,650 to 300 pre-snap, 1,750 to 190 in live play). The loop also caps catch-up steps on slow devices.

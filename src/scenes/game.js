@@ -447,7 +447,7 @@ export class GameScene {
     // entities, depth-sorted
     const ents = p.ents.slice().sort((a, b) => a.y - b.y);
     const bl = p.ball, inAir = bl.state === 'air', left = inAir ? bl.T - bl.t : 9;
-    const td = p.result && p.result.kind === 'td';
+    const td = p.result && p.result.kind === 'td', blur = app.career?.settings.blur !== false;
     for (const e of ents) {
       const off = e.side === 'off';
       const T = off ? m.me : m.opp;
@@ -475,12 +475,17 @@ export class GameScene {
       }
       // shadow shrinks as the player leaves the ground
       rect(x - 3 + Math.min(2, lift >> 1), y - 1, 7 - Math.min(4, lift), 2, 'rgba(0,0,0,0.3)');
-      // juke after-images
-      if (e === p.carrier && e.jukeT > 0 && e.trail.length > 12) {
-        const n = e.trail.length, ctx = G.ctx;
-        ctx.globalAlpha = 0.28;
-        for (const back of [10, 20]) { const tx = this.sx(e.trail[n - back - 2]), ty = this.sy(e.trail[n - back - 1]); const gi = playerSprite(T.c1, T.c2, fr, face, e.p.skin || 0, pants); drawSprite(gi, tx - 4, ty - gi.height + 1); }
-        ctx.globalAlpha = 1;
+      // after-images: a juke always leaves two; with motion blur on, a ball carrier at full tilt leaves a faint smear
+      if ((e === p.carrier || e === p.returner) && !down && e.trail.length > 44) {
+        const juke = e.jukeT > 0, a = juke ? 0.28 : blur ? clamp((sp - 6.2) / 3.5, 0, 1) * 0.3 : 0;
+        if (a > 0.02) {
+          const n = e.trail.length, ctx = G.ctx, gi = playerSprite(T.c1, T.c2, fr, face, e.p.skin || 0, pants);
+          (juke ? [10, 20] : [6, 12]).forEach((back, i) => {
+            ctx.globalAlpha = juke ? a : a / (i + 1);
+            drawSprite(gi, this.sx(e.trail[n - back - 2]) - 4, this.sy(e.trail[n - back - 1]) - gi.height + 1 - lift);
+          });
+          ctx.globalAlpha = 1;
+        }
       }
       if (this.celeb && this.celeb.e === e && p.result) { this.drawCeleb(e, x, y, T, pants, face); continue; }
       const img = playerSprite(T.c1, T.c2, fr, face, e.p.skin || 0, pants);
@@ -510,6 +515,11 @@ export class GameScene {
       // fading trail
       this.ballTrail.push([b.x, b.y, b.z]); if (this.ballTrail.length > 8) this.ballTrail.shift();
       this.ballTrail.forEach(([tx, ty, tz], i) => { if (i % 2) return; rect(this.sx(tx) - 1, this.sy(ty, tz) - 2, 2, 1, `rgba(255,255,255,${0.08 + i * 0.05})`); });
+      if (blur && b.state !== 'loose' && this.ballTrail.length >= 8) { // ghost balls smear a fast pass or kick
+        const ctx = G.ctx;
+        for (const [i, a] of [[3, 0.14], [5, 0.28]]) { const [tx, ty, tz] = this.ballTrail[i]; ctx.globalAlpha = a; ballSprite(this.sx(tx), this.sy(ty, tz) - 2, spin); }
+        ctx.globalAlpha = 1;
+      }
       const sh = Math.max(1, 4 - Math.round(b.z / 4));
       rect(this.sx(b.x) - sh, this.sy(b.y), sh * 2, 1, 'rgba(0,0,0,0.45)');
       ballSprite(bx, by, spin);
@@ -807,7 +817,9 @@ export class GameScene {
     big('PAUSED', W / 2, y + 7, '#ffd23f', { align: 'center', scale: 2 });
     UI.button(x + 20, y + 30, w - 40, 20, 'RESUME', () => { this.paused = false; }, { color: '#2fa84f' });
     UI.button(x + 20, y + 54, w - 40, 20, 'SIM REST OF GAME', () => { this.paused = false; if (m.phase !== 'final') m.simRest(); }, { color: '#4b5378' });
-    UI.button(x + 20, y + 78, w - 40, 20, `SOUND ${app.career.settings.sound ? 'ON' : 'OFF'}`, () => { app.career.settings.sound = !app.career.settings.sound; }, { color: '#2f6fe0' });
+    const st = app.career.settings, hw = (w - 44) / 2;
+    UI.button(x + 20, y + 78, hw, 20, `SOUND ${st.sound ? 'ON' : 'OFF'}`, () => { st.sound = !st.sound; }, { color: '#2f6fe0' });
+    UI.button(x + 24 + hw, y + 78, hw, 20, `BLUR ${st.blur !== false ? 'ON' : 'OFF'}`, () => { st.blur = st.blur === false; }, { color: '#2f6fe0' });
     if (this.onExit) UI.button(x + 20, y + 102, w - 40, 20, 'SAVE & EXIT', () => { this.paused = false; this.onExit(); }, { color: '#7e2553' });
     text('KEYS: SPACE SNAP  H HANDOFF  WASD / ARROWS', W / 2, y + 132, '#9aa3cf', 1, 'center');
     text('B BULLET  T TIMEOUT  ESC PAUSE', W / 2, y + 141, '#9aa3cf', 1, 'center');
