@@ -80,7 +80,8 @@ export class Match {
     this.ballYard = 25; this.ballY = 26.67; this.down = 1; this.toGo = 10; this.fd = 35;
     this.feed = []; this.sfx = [];
     // per-game feats for achievements
-    this.feats = { tds: 0, longPass: 0, longRunTD: 0, krTD: false, fg50: false, twoPt: false, maxDeficit: 0, maxMisses: 0, stretched: false, hailMary: false, passYds: 0, passTD: 0, rushYds: 0 };
+    this.feats = { tds: 0, longPass: 0, longRunTD: 0, krTD: false, fg50: false, twoPt: false, maxDeficit: 0, maxMisses: 0, stretched: false, hailMary: false, passYds: 0, passTD: 0, rushYds: 0,
+      ints: 0, punts: 0, longTD: 0, onside: false, walkoffFG: false, fgLong: 0, recBest: 0, rushBest: 0, py: {}, snow: this.weather === 'snow', night: this.night };
     this.playMisses = 0;
     this.over = false;
     this.coin();
@@ -88,6 +89,8 @@ export class Match {
   get K() { return this.lineup.K[0]; }
   st(p) { if (!p || !p.id) return null; return (this.stats[p.id] ||= {}); }
   inc(p, k, n = 1) { const s = this.st(p); if (s) s[k] = (s[k] || 0) + n; }
+  // single-game yards per player (stars and depth players alike) for the big single-game yardage achievements
+  addYds(kind, p, y) { const k = kind + (p.id || displayName(p)), py = this.feats.py; return (py[k] = (py[k] || 0) + y); }
   say(text, next, dur = 1.4) {
     if (this.injNote) { const note = this.injNote, after = next; this.injNote = null; next = () => this.say(note, after, 2.2); }
     this.phase = 'msg'; this.msg = text; this.timer = dur; this.next_ = next; this.log(text);
@@ -205,16 +208,19 @@ export class Match {
         this.inc(r.passer, 'pcmp'); this.inc(r.passer, 'pyds', y); this.inc(r.receiver, 'rec'); this.inc(r.receiver, 'recyds', y);
         this.team.pyds += y;
         const F = this.feats; F.passYds += y; F.longPass = Math.max(F.longPass, y);
+        F.recBest = Math.max(F.recBest, this.addYds('r', r.receiver, y));
+        if (r.kind === 'td') F.longTD = Math.max(F.longTD, y);
         if (r.kind === 'td') {
           this.inc(r.passer, 'ptd'); this.inc(r.receiver, 'rectd'); F.passTD++;
           if (y >= 40 && this.clock <= 10 && (this.q === 2 || this.q === 4)) F.hailMary = true;
         }
       }
-      if (r.kind === 'int' || r.kind === 'pick6') this.inc(r.passer, 'pint');
+      if (r.kind === 'int' || r.kind === 'pick6') { this.inc(r.passer, 'pint'); this.feats.ints++; }
     } else if (r.carrier && !r.sack) {
       this.inc(r.carrier, 'ratt'); this.inc(r.carrier, 'ryds', y); this.team.ryds += y;
       this.feats.rushYds += y;
-      if (r.kind === 'td') { this.inc(r.carrier, 'rtd'); this.feats.longRunTD = Math.max(this.feats.longRunTD, y); }
+      this.feats.rushBest = Math.max(this.feats.rushBest, this.addYds('u', r.carrier, y));
+      if (r.kind === 'td') { this.inc(r.carrier, 'rtd'); this.feats.longRunTD = Math.max(this.feats.longRunTD, y); this.feats.longTD = Math.max(this.feats.longTD, y); }
     }
   }
   afterPlay(r) {
@@ -299,10 +305,11 @@ export class Match {
   }
   onside() {
     this.sfx.push('kick');
-    if (this.rng.chance(0.2)) this.say('ONSIDE KICK RECOVERED!', () => this.next(() => this.startDrive(45)), 1.8);
+    if (this.rng.chance(0.2)) { this.feats.onside = true; this.feat(); this.say('ONSIDE KICK RECOVERED!', () => this.next(() => this.startDrive(45)), 1.8); }
     else this.say('ONSIDE KICK - THEY RECOVER', () => this.next(() => this.oppDrive(55)), 1.8);
   }
   punt() {
+    this.feats.punts++;
     const leg = eff(this.K, 'LEG');
     const d = Math.round(35 + leg * 2 + this.rng.range(-6, 8));
     const land = this.ballYard + d;
@@ -326,7 +333,11 @@ export class Match {
     this.inc(this.K, 'fga');
     if (this.clock > 0) this.clock = Math.max(0, this.clock - 4);
     if (k.good) {
-      this.inc(this.K, 'fgm'); this.score.u += 3; if (k.dist >= 50) this.feats.fg50 = true; this.feat();
+      this.inc(this.K, 'fgm'); this.score.u += 3; if (k.dist >= 50) this.feats.fg50 = true;
+      this.feats.fgLong = Math.max(this.feats.fgLong, k.dist);
+      const lead = this.score.u - this.score.o;
+      if (lead >= 1 && lead <= 3 && (this.q >= 5 || (this.q === 4 && this.clock <= 10))) this.feats.walkoffFG = true; // a late go-ahead kick
+      this.feat();
       return this.say(`${k.dist} YD FIELD GOAL IS GOOD!`, () => this.afterScore('u'), 1.6);
     }
     const oy = Math.round(clamp(100 - (this.ballYard - 7), 20, 99));
@@ -482,7 +493,7 @@ export class Match {
     return s / n + (this.c.coords.oc?.stars || 0) * 0.12;
   }
   // live achievement check after anything that can earn one
-  feat() { if (this.onFeat) this.onFeat(this.feats); }
+  feat() { this.feats.points = this.score.u; if (this.onFeat) this.onFeat(this.feats); }
   // ---------- in-game autosave ----------
   // A checkpoint is taken before every snap and every opponent drive; the scene persists it with the career.
   checkpoint(next) {
