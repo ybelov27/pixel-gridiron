@@ -195,7 +195,7 @@ export class PlaySim {
     this.carrier = e; this.carrierKind = kind; this.ball.state = 'carried';
     if (kind !== 'rush') e.route = null;
     e.toBall = false; e.cd2 = 0; e.jukeT = 0; e.slowT = 0; e.diveT = 0;
-    for (const d of this.defs) d.pursueAt = this.t + d.react * (d.role === 'S' || d.role === 'CB' ? 1.6 : 1) + this.rng.range(0, 0.15);
+    for (const d of this.defs) d.pursueAt = this.t + d.react * (d.role === 'S' || d.role === 'CB' ? 1.2 : 1) + this.rng.range(0, 0.15);
   }
 
   // ----- simulation -----
@@ -334,7 +334,7 @@ export class PlaySim {
       const press = m.x < this.los + 3, cushion = press ? 3 : d.role === 'S' ? 1 : 0;
       // at the line, shade a step inside the receiver so he can release outside instead of running into him
       const shade = press ? Math.sign(this.by - m.y || 1) * 0.8 : 0;
-      const sp = d.spd * (0.86 + eff(d.p, 'COV') * 0.012);
+      const sp = d.spd * (0.93 + eff(d.p, 'COV') * 0.012);
       this.moveTo(d, px + cushion, py + shade, sp, dt);
     } else if (d.deep) {
       const deep = this.receivers.filter((r) => !r.block && !r.run).sort((a, b) => b.x - a.x)[0];
@@ -450,10 +450,10 @@ export class PlaySim {
       if (dist(d, c) > r) continue;
       if (!this.carrier && !(d.role === 'DL' || d.rush) && this.t < 1.2) continue; // coverage players don't tackle QB early
       const cs = eff(c.p, 'STR') || 3, ct = eff(d.p, 'TKL');
-      let pMiss = 0.17 + (cs - ct) * 0.045 - this.diff.contest * 0.5;
+      let pMiss = 0.13 + (cs - ct) * 0.045 - this.diff.contest * 0.5;
       if (c.jukeT > 0) pMiss += 0.42 + eff(c.p, 'SPD') * 0.02;
       if (armTackle) pMiss += 0.25;
-      if (this.carrierKind === 'rec' || this.carrierKind === 'kr') pMiss += 0.06 + eff(c.p, 'SPD') * 0.008; // open-field runners are slippery
+      if (this.carrierKind === 'rec' || this.carrierKind === 'kr') pMiss += 0.03 + eff(c.p, 'SPD') * 0.005; // open-field runners are slippery
       if (c.diving) pMiss = 0;
       pMiss = clamp(pMiss, c.diving ? 0 : 0.03, 0.8);
       if (this.rng.chance(pMiss)) { d.stun = 0.7; d.cd = 1; this.events.push('miss'); continue; }
