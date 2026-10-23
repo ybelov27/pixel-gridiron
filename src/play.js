@@ -331,9 +331,11 @@ export class PlaySim {
       const n = m.trail.length;
       let px = m.x, py = m.y;
       if (n > back + 2) { px = m.trail[n - back - 2]; py = m.trail[n - back - 1]; }
-      const cushion = m.x < this.los + 3 ? 3 : d.role === 'S' ? 1 : 0;
+      const press = m.x < this.los + 3, cushion = press ? 3 : d.role === 'S' ? 1 : 0;
+      // at the line, shade a step inside the receiver so he can release outside instead of running into him
+      const shade = press ? Math.sign(this.by - m.y || 1) * 0.8 : 0;
       const sp = d.spd * (0.86 + eff(d.p, 'COV') * 0.012);
-      this.moveTo(d, px + cushion, py, sp, dt);
+      this.moveTo(d, px + cushion, py + shade, sp, dt);
     } else if (d.deep) {
       const deep = this.receivers.filter((r) => !r.block && !r.run).sort((a, b) => b.x - a.x)[0];
       const tx = Math.max(this.los + 12, (deep ? deep.x : this.los) + 5);

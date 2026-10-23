@@ -41,7 +41,7 @@ export const ACHIEVEMENTS = [
   ['td8', 'TOUCHDOWN PARTY', 'SCORE 8 TOUCHDOWNS IN A GAME', 8],
   ['pts50', 'HALF CENTURY', 'SCORE 50+ POINTS IN A GAME', 6],
   ['yds600', 'YARDS FOR DAYS', 'GAIN 600+ TOTAL YARDS IN A GAME', 8],
-  ['rec200', 'NUMBER ONE TARGET', 'ONE RECEIVER GAINS 200+ YARDS IN A GAME', 5],
+  ['rec275', 'NUMBER ONE TARGET', 'ONE RECEIVER GAINS 275+ YARDS IN A GAME', 6],
   ['rb175', 'WORKHORSE', 'ONE RUNNER GAINS 175+ YARDS IN A GAME', 5],
   ['fg55', 'MOONSHOT', 'MAKE A 55+ YARD FIELD GOAL', 8],
   ['onside', 'SURPRISE!', 'RECOVER AN ONSIDE KICK', 5],
@@ -95,7 +95,7 @@ function feats(c, f) {
   if ((f.tds || 0) >= 8) unlock(c, 'td8');
   if ((f.points || 0) >= 50) unlock(c, 'pts50');
   if ((f.passYds || 0) + (f.rushYds || 0) >= 600) unlock(c, 'yds600');
-  if ((f.recBest || 0) >= 200) unlock(c, 'rec200');
+  if ((f.recBest || 0) >= 275) unlock(c, 'rec275');
   if ((f.rushBest || 0) >= 175) unlock(c, 'rb175');
   if ((f.fgLong || 0) >= 55) unlock(c, 'fg55');
   if (f.onside) unlock(c, 'onside');

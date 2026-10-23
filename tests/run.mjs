@@ -263,9 +263,9 @@ test('achievements unlock once, pay CC, and survive a reload', () => {
 });
 test('new game and career trophies unlock from their feats', () => {
   const c = newCareer({ seed: 62, teamId: 3 }); startSeason(c);
-  const f = { tds: 8, longTD: 85, passYds: 400, rushYds: 210, recBest: 210, rushBest: 180, fgLong: 56, onside: true, walkoffFG: true, ints: 0, punts: 0, snow: true, night: true };
+  const f = { tds: 8, longTD: 85, passYds: 400, rushYds: 210, recBest: 280, rushBest: 180, fgLong: 56, onside: true, walkoffFG: true, ints: 0, punts: 0, snow: true, night: true };
   checkGame(c, { us: 52, them: 49, ot: false, feats: f });
-  for (const id of ['long_td80', 'td8', 'pts50', 'yds600', 'rec200', 'rb175', 'fg55', 'onside', 'walkoff', 'no_int', 'no_punt', 'snow_win', 'night_win'])
+  for (const id of ['long_td80', 'td8', 'pts50', 'yds600', 'rec275', 'rb175', 'fg55', 'onside', 'walkoff', 'no_int', 'no_punt', 'snow_win', 'night_win'])
     assert.ok(c.ach[id], `${id} should unlock`);
   // a simulated game has no feats: none of the "played it yourself" trophies may unlock from it
   const c2 = newCareer({ seed: 63, teamId: 3 }); startSeason(c2);
