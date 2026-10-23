@@ -83,7 +83,8 @@ export class Match {
     this.feed = []; this.sfx = [];
     // per-game feats for achievements
     this.feats = { tds: 0, longPass: 0, longRunTD: 0, krTD: false, fg50: false, twoPt: false, maxDeficit: 0, maxMisses: 0, stretched: false, hailMary: false, passYds: 0, passTD: 0, rushYds: 0,
-      ints: 0, punts: 0, longTD: 0, onside: false, walkoffFG: false, fgLong: 0, recBest: 0, rushBest: 0, py: {}, snow: this.weather === 'snow', night: this.night };
+      ints: 0, punts: 0, longTD: 0, onside: false, walkoffFG: false, fgLong: 0, recBest: 0, rushBest: 0, py: {},
+      longPassTD: 0, qbRunTD: -1, patt: 0, pcmp: 0, recTDBest: 0, rushTDBest: 0, snow: this.weather === 'snow', night: this.night };
     this.playMisses = 0;
     this.over = false;
     this.coin();
@@ -91,7 +92,7 @@ export class Match {
   get K() { return this.lineup.K[0]; }
   st(p) { if (!p || !p.id) return null; return (this.stats[p.id] ||= {}); }
   inc(p, k, n = 1) { const s = this.st(p); if (s) s[k] = (s[k] || 0) + n; }
-  // single-game yards per player (stars and depth players alike) for the big single-game yardage achievements
+  // single-game yards / touchdowns per player (stars and depth players alike) for the single-game achievements
   addYds(kind, p, y) { const k = kind + (p.id || displayName(p)), py = this.feats.py; return (py[k] = (py[k] || 0) + y); }
   say(text, next, dur = 1.4) {
     if (this.injNote) { const note = this.injNote, after = next; this.injNote = null; next = () => this.say(note, after, 2.2); }
@@ -205,13 +206,14 @@ export class Match {
   recordPlay(r) {
     const y = Math.round(r.yards);
     if (r.thrown) {
-      this.inc(r.passer, 'patt');
+      this.inc(r.passer, 'patt'); this.feats.patt++;
       if (r.receiver) {
+        this.feats.pcmp++;
         this.inc(r.passer, 'pcmp'); this.inc(r.passer, 'pyds', y); this.inc(r.receiver, 'rec'); this.inc(r.receiver, 'recyds', y);
         this.team.pyds += y;
         const F = this.feats; F.passYds += y; F.longPass = Math.max(F.longPass, y);
         F.recBest = Math.max(F.recBest, this.addYds('r', r.receiver, y));
-        if (r.kind === 'td') F.longTD = Math.max(F.longTD, y);
+        if (r.kind === 'td') { F.longTD = Math.max(F.longTD, y); F.longPassTD = Math.max(F.longPassTD, y); F.recTDBest = Math.max(F.recTDBest, this.addYds('rt', r.receiver, 1)); }
         if (r.kind === 'td') {
           this.inc(r.passer, 'ptd'); this.inc(r.receiver, 'rectd'); F.passTD++;
           if (y >= 40 && this.clock <= 10 && (this.q === 2 || this.q === 4)) F.hailMary = true;
@@ -222,7 +224,12 @@ export class Match {
       this.inc(r.carrier, 'ratt'); this.inc(r.carrier, 'ryds', y); this.team.ryds += y;
       this.feats.rushYds += y;
       this.feats.rushBest = Math.max(this.feats.rushBest, this.addYds('u', r.carrier, y));
-      if (r.kind === 'td') { this.inc(r.carrier, 'rtd'); this.feats.longRunTD = Math.max(this.feats.longRunTD, y); this.feats.longTD = Math.max(this.feats.longTD, y); }
+      if (r.kind === 'td') {
+        const F = this.feats;
+        this.inc(r.carrier, 'rtd'); F.longRunTD = Math.max(F.longRunTD, y); F.longTD = Math.max(F.longTD, y);
+        F.rushTDBest = Math.max(F.rushTDBest, this.addYds('ut', r.carrier, 1));
+        if (r.carrierKind === 'qb') F.qbRunTD = Math.max(F.qbRunTD, y);
+      }
     }
   }
   afterPlay(r) {
