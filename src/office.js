@@ -338,7 +338,7 @@ export function startOffseason(c) {
     ['COACH OF YEAR', pct(t) >= 0.75 ? c.coach.name : `${rng.pick(COACH_FIRST)} ${rng.pick(LAST)}`],
   ];
   saveRng(c, rng);
-  if (res.title) c.coach.titles++;
+  if (res.title) { c.coach.titles++; (c.titleYears ||= []).push(c.year); }
   c.history.unshift({ year: c.year, team: t.abbr, w: t.w, l: t.l, t: t.t, result: res.text, champ: champ ? teamName(champ) : '-', mvp: awards[0][1] });
   c.seasonEnd = { res, awards, champ: champ ? teamName(champ) : '-' };
   addNews(c, `${champ ? teamName(champ) : '?'} WIN PIXEL BOWL ${c.year}!`);

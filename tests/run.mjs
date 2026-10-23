@@ -11,7 +11,7 @@ import { status, startSeason, simUserGame, simRound, finishUserGame, resumableGa
 import { serialize, deserialize } from '../src/save.js';
 import { SONGS } from '../src/music.js';
 import { OLD_TEAMS, OLD_ABBR } from '../src/data.js';
-import { ACHIEVEMENTS, achCount, unlock } from '../src/achievements.js';
+import { ACHIEVEMENTS, achCount, unlock, checkGame, checkCareer } from '../src/achievements.js';
 
 let passed = 0;
 const test = (name, fn) => { try { fn(); passed++; console.log('ok  -', name); } catch (e) { console.error('FAIL-', name, '\n', e); process.exitCode = 1; } };
@@ -281,6 +281,24 @@ test('dome teams never get weather or wind', () => {
   const c = newCareer({ seed: 14, teamId: 17 }); startSeason(c); c.week = 14;
   const g = c.schedule[c.week].find((x) => c.teams[x.h].dome);
   for (let i = 0; i < 20; i++) { const m = new Match(c, g); assert.equal(m.weather, 'clear'); assert.equal(m.wind, 0); }
+});
+test('new game and career trophies unlock from their feats', () => {
+  const c = newCareer({ seed: 62, teamId: 3 }); startSeason(c);
+  const f = { tds: 8, longTD: 85, passYds: 400, rushYds: 210, recBest: 210, rushBest: 180, fgLong: 56, onside: true, walkoffFG: true, ints: 0, punts: 0, snow: true, night: true };
+  checkGame(c, { us: 52, them: 49, ot: false, feats: f });
+  for (const id of ['long_td80', 'td8', 'pts50', 'yds600', 'rec200', 'rb175', 'fg55', 'onside', 'walkoff', 'no_int', 'no_punt', 'snow_win', 'night_win'])
+    assert.ok(c.ach[id], `${id} should unlock`);
+  // a simulated game has no feats: none of the "played it yourself" trophies may unlock from it
+  const c2 = newCareer({ seed: 63, teamId: 3 }); startSeason(c2);
+  checkGame(c2, { us: 21, them: 7, ot: false });
+  for (const id of ['no_int', 'no_punt', 'walkoff', 'snow_win']) assert.ok(!c2.ach[id], `${id} must not unlock from a sim`);
+  // career: back-to-back titles, the meta trophies
+  c2.titleYears = [3, 4]; c2.cc = 120; checkCareer(c2);
+  assert.ok(c2.ach.repeat && c2.ach.bank100);
+  for (const [id] of ACHIEVEMENTS) if (id !== 'hof') c2.ach[id] ||= { y: 1, w: 1 };
+  checkCareer(c2);
+  assert.ok(c2.ach.hof, 'HALL OF FAME unlocks once everything else is done');
+  assert.equal(new Set(ACHIEVEMENTS.map((a) => a[0])).size, ACHIEVEMENTS.length, 'achievement ids are unique');
 });
 test('deserialize rejects garbage', () => {
   assert.throws(() => deserialize('{"hello":1}'));
