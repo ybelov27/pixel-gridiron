@@ -27,7 +27,7 @@ export function flightOf(d, bullet, arm = 5) {
 function bodyOf(e, role) {
   const big = role === 'OL' || role === 'DL' || role === 'BLK';
   e.mass = big ? 1.7 : role === 'LB' || role === 'TE' ? 1.25 : 1;
-  e.acc = big ? 16 : role === 'QB' ? 20 : (e.side === 'def' ? 25 : 22) + (e.p.attrs.SPD || 4) * 0.9;
+  e.acc = big ? 17.6 : role === 'QB' ? 22 : (e.side === 'def' ? 27.5 : 24.2) + (e.p.attrs.SPD || 4) * 1;
 }
 export function makeDefender(rating, i, rng) {
   const a = (k) => clamp(Math.round(rating * 2 + rng.gauss() * 1.2), 1, 10);
@@ -101,7 +101,7 @@ export class PlaySim {
     this.CB[0].man = this.WR[0]; this.CB[1].man = this.WR[1]; this.S[0].man = this.WR[2];
     this.LB[0].man = this.TE.block ? null : this.TE; this.LB[2].man = (this.RB.block || this.RB.run) ? null : this.RB;
     this.S[1].deep = true;
-    for (const d of this.defs) d.react = clamp(0.26 - eff(d.p, 'COV') * 0.016 + diff.react + (o.ocStars || 0) * 0.015, 0.05, 0.6);
+    for (const d of this.defs) d.react = clamp(0.236 - eff(d.p, 'COV') * 0.0145 + diff.react + (o.ocStars || 0) * 0.015, 0.05, 0.6);
     // pass rush: DL i vs OL pair, center helps the middle two
     const pair = [0, 1, 3, 4];
     const olAvg = this.OL.reduce((s, e) => s + eff(e.p, 'BLK') + eff(e.p, 'STR') * 0.5, 0) / 5;
@@ -167,7 +167,7 @@ export class PlaySim {
     for (const dd of this.defs) {
       if (dd.engaged || dd.rush || dd.role === 'DL') continue;
       const d = dist(dd, L);
-      if (d < 25) dd.toBallAt = this.t + dd.react + (bullet ? 0.3 : 0.35) + Math.max(0, d - (bullet ? 6 : 11)) * 0.02;
+      if (d < 25) dd.toBallAt = this.t + dd.react + (bullet ? 0.27 : 0.35) + Math.max(0, d - (bullet ? 6 : 11)) * 0.02;
     }
     return true;
   }
@@ -271,7 +271,7 @@ export class PlaySim {
     const vx = d > 1e-4 ? dx / d * s : 0, vy = d > 1e-4 ? dy / d * s : 0;
     // momentum: velocity changes at most `acc` yd/s^2, so hard cuts take time and pursuers can overrun
     let ax = vx - e.vx, ay = vy - e.vy;
-    const am = Math.hypot(ax, ay), lim = (e.acc || 26) * dt;
+    const am = Math.hypot(ax, ay), lim = (e.acc || 28.6) * dt;
     if (am > lim) { ax *= lim / am; ay *= lim / am; }
     e.vx += ax; e.vy += ay;
     e.x += e.vx * dt; e.y += e.vy * dt;
