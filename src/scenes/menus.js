@@ -18,7 +18,10 @@ import { saveCareer, loadCareer, hasSave, deleteSave, exportCareer, importCareer
 const C = { bg: THEME.bg, panel: THEME.panel, gold: THEME.gold, dim: THEME.dim, good: '#2fa84f', bad: THEME.bad, blue: THEME.blue, white: THEME.text };
 const hub = () => app.go(new HubScene());
 const err = (e) => { if (e) { app.toast(e); sfx.bad(); return true; } sfx.cash(); return false; };
-const lightText = (t) => (t.c2 === '#111111' || t.c2 === '#1d3557' || t.c2 === '#22223b' || t.c2 === '#14213d' || t.c2 === '#2b2b2b' || t.c2 === '#3f2a14' || t.c2 === '#1e3a8a') ? '#fff' : t.c2;
+const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); };
+const lightText = (t) => lum(t.c2) < 95 ? '#fff' : t.c2;
+// second line under a city: its conference tag (two-team cities) or its division
+const teamSub = (t) => t.name ? `${t.name} - ${DIVS[t.div]}` : `${CONF_ABBR[t.conf]} ${DIVS[t.div]}`;
 // full-width title bar (extends past the 384 box to the screen edges)
 function header(title, sub = '', back = hub) {
   const ex = boxX();
@@ -136,7 +139,7 @@ export class NewCareerScene {
     UI.button(W - 34, 44, 22, 30, '>', () => { this.team = (this.team + 1) % 32; sfx.click(); });
     helmet(42, 36, d[3], d[4], 3, 1);
     big(d[0], 102, 36, '#fff', { scale: 2 });
-    big(d[1], 102, 56, lightText(t), { scale: 2 });
+    big(d[1] || CONF_ABBR[Math.floor(this.team / 16)], 102, 56, lightText(t), { scale: 2 });
     const conf = Math.floor(this.team / 16), div = Math.floor(this.team / 4) % 4;
     text(`${CONFS[conf]} CONFERENCE - ${DIVS[div]} DIVISION   (${this.team + 1}/32)`, 12, 92, '#fff');
     UI.button(W - 110, 86, 94, 14, 'RANDOM TEAM', () => { this.team = Math.floor(Math.random() * 32); }, { color: '#7e2553' });
@@ -182,7 +185,7 @@ export class HubScene {
     rect(2, 1, 35, 31, shadeColor(t.c1, 0.45)); rect(2, 31, 35, 1, '#0b0d1c');
     helmet(4, 4, t.c1, t.c2, 2, 1);
     big(t.city, 42, 5, '#fff');
-    big(t.name, 42, 17, lightText(t), { scale: 1 });
+    big(teamSub(t), 42, 17, lightText(t), { scale: 1 });
     const rec = `${t.w}-${t.l}${t.t ? '-' + t.t : ''}`;
     big(rec, W - 8, 4, '#fff', { align: 'right', scale: 2 });
     text(`SEASON ${c.year}`, W - 8, 24, '#fff', 1, 'right');
@@ -241,7 +244,7 @@ export class HubScene {
       helmet(R - 34, 60, o.c1, o.c2, 2, -1);
       big(t.abbr, X + 16, 88, '#fff', { align: 'center' }); big(o.abbr, R - 18, 88, '#fff', { align: 'center' });
       big(o.city, 120, 60, '#fff', { align: 'center' });
-      text(`${o.name}  (${o.w}-${o.l}${o.t ? '-' + o.t : ''})`, 120, 80, C.dim, 1, 'center');
+      text(`${teamSub(o)}  (${o.w}-${o.l}${o.t ? '-' + o.t : ''})`, 120, 80, C.dim, 1, 'center');
       const dp = diffParams(c), me = teamRatings(c, c.userTeamId);
       const row = (y, lab, a, b) => { stars(X + 4, y, Math.round(a * 2) / 2); text(lab, 120, y, C.dim, 1, 'center'); stars(R - 34, y, Math.round(b * 2) / 2); };
       row(100, 'OFFENSE', me.off, o.off + dp.cpu); row(109, 'DEFENSE', me.def, o.def + dp.cpu);
@@ -564,7 +567,7 @@ export class AwardsScene {
     const t = userTeam(c);
     header(`SEASON ${c.year} REVIEW`, '', null);
     panel(4, 20, 376, 40);
-    text(`${t.city} ${t.name}: ${t.w}-${t.l}${t.t ? '-' + t.t : ''}`, 12, 26, '#fff', 1);
+    text(`${teamName(t)}: ${t.w}-${t.l}${t.t ? '-' + t.t : ''}`, 12, 26, '#fff', 1);
     text(e.res.text, 12, 38, e.res.title ? C.gold : e.res.made ? C.good : C.bad, 2);
     text(`PIXEL BOWL CHAMPION: ${e.champ}`, 372, 26, C.dim, 1, 'right');
     panel(4, 64, 376, 70);
@@ -591,11 +594,11 @@ export class FiredScene {
       const t = c.teams[id], y = 40 + i * 52;
       panel(8, y, 368, 48);
       rect(16, y + 8, 32, 32, t.c1); frame(16, y + 8, 32, 32, t.c2);
-      text(`${t.city} ${t.name}`, 56, y + 8, '#fff', 1);
+      text(teamName(t), 56, y + 8, '#fff', 1);
       text(`LAST SEASON ${t.w}-${t.l}${t.t ? '-' + t.t : ''}`, 56, y + 18, C.dim);
       text('OFF', 56, y + 30, C.dim); stars(74, y + 30, Math.round(t.off * 2) / 2);
       text('DEF', 112, y + 30, C.dim); stars(130, y + 30, Math.round(t.def * 2) / 2);
-      UI.button(286, y + 16, 82, 18, 'ACCEPT', () => app.confirm('TAKE THIS JOB?', [`YOU WILL TAKE OVER THE ${t.city} ${t.name} WITH THEIR ROSTER. HALF YOUR CC COMES WITH YOU.`], () => { O.acceptOffer(c, id); app.go(new ResignScene()); }, 'ACCEPT'), { color: C.good });
+      UI.button(286, y + 16, 82, 18, 'ACCEPT', () => app.confirm('TAKE THIS JOB?', [`YOU WILL TAKE OVER ${teamName(t)} WITH THEIR ROSTER. HALF YOUR CC COMES WITH YOU.`], () => { O.acceptOffer(c, id); app.go(new ResignScene()); }, 'ACCEPT'), { color: C.good });
     });
   }
 }
@@ -634,7 +637,7 @@ export class StandingsScene {
         const yy = y + 18 + i * 17, me = t.id === c.userTeamId;
         if (me) rect(x + 3, yy - 3, 180, 13, '#4b5378');
         rect(x + 6, yy - 2, 3, 11, t.c1);
-        text(t.city, x + 12, yy, me ? C.gold : '#fff'); text(t.name, x + 12, yy + 6, C.dim);
+        text(t.city, x + 12, yy, me ? C.gold : '#fff'); if (t.name) text(t.name, x + 12, yy + 6, C.dim);
         text(`${t.w}-${t.l}-${t.t}`, x + 104, yy + 2, '#fff'); text(`${t.pf}-${t.pa}`, x + 140, yy + 2, '#c2c3c7');
       });
     }

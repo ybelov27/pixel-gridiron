@@ -83,6 +83,8 @@ export function hi(c) {
 export function boxX() { return Math.floor((W - BW) / 2); }
 export function boxY() { return Math.floor((H - BH) / 2); }
 export function getCanvas() { return canvas; }
+// draw into another canvas context for the duration of fn (used to bake cached images)
+export function withCtx(c, fn) { const old = ctx; ctx = c; try { fn(); } finally { ctx = old; } }
 
 // ---------- bitmap font (3x5 glyphs, 4x6 cell) ----------
 const G = {
@@ -119,13 +121,25 @@ function fontAtlas(color) {
 }
 const idx = {}; CHARS.forEach((c, i) => idx[c] = i);
 export function textWidth(s, scale = 1) { return (String(s).length * 4 - 1) * scale; }
+// finished strings are baked once and reused (one drawImage per string instead of one per glyph)
+const textCache = new Map();
 export function text(s, x, y, color = '#fff', scale = 1, align = 'left', shadow = null) {
   s = String(s).toUpperCase();
-  if (align === 'center') x -= Math.floor(textWidth(s, scale) / 2);
-  else if (align === 'right') x -= textWidth(s, scale);
+  const w = textWidth(s, scale);
+  if (align === 'center') x -= Math.floor(w / 2);
+  else if (align === 'right') x -= w;
   x = Math.round(x); y = Math.round(y);
-  if (shadow) drawStr(s, x + scale, y + scale, shadow, scale);
-  drawStr(s, x, y, color, scale);
+  if (!s.trim()) return;
+  const key = s + '|' + color + '|' + scale + '|' + shadow;
+  let c = textCache.get(key);
+  if (!c) {
+    if (textCache.size > 600) textCache.clear();
+    c = document.createElement('canvas'); c.width = w + scale + 1; c.height = 5 * scale + scale + 1;
+    const cx = c.getContext('2d'); cx.imageSmoothingEnabled = false;
+    withCtx(cx, () => { if (shadow) drawStr(s, scale, scale, shadow, scale); drawStr(s, 0, 0, color, scale); });
+    textCache.set(key, c);
+  }
+  ctx.drawImage(c, x, y);
 }
 function drawStr(s, x, y, color, scale) {
   const a = fontAtlas(color), ha = hi(a);
@@ -174,9 +188,15 @@ export function panel(x, y, w, h, bg = THEME_PANEL, border = null) {
 const THEME_PANEL = '#232a55';
 // ---------- star icons ----------
 const STAR = ['00100', '01110', '11111', '01110', '01010'];
+// small pixel images are baked once per colour (one drawImage instead of a rect per pixel)
+const bakeCache = new Map();
+function baked(key, w, h, paint) {
+  let c = bakeCache.get(key);
+  if (!c) { c = document.createElement('canvas'); c.width = w; c.height = h; const cx = c.getContext('2d'); withCtx(cx, paint); bakeCache.set(key, c); }
+  return c;
+}
 export function starIcon(x, y, c = '#ffcd34') {
-  ctx.fillStyle = c;
-  for (let r = 0; r < 5; r++) for (let k = 0; k < 5; k++) if (STAR[r][k] === '1') ctx.fillRect(Math.round(x) + k, Math.round(y) + r, 1, 1);
+  ctx.drawImage(baked('star' + c, 5, 5, () => { ctx.fillStyle = c; for (let r = 0; r < 5; r++) for (let k = 0; k < 5; k++) if (STAR[r][k] === '1') ctx.fillRect(k, r, 1, 1); }), Math.round(x), Math.round(y));
 }
 // draws a row of stars for a 0.5-5 rating; returns width
 export function stars(x, y, v, max = 5, on = '#ffcd34', off = '#3b3f58') {
@@ -236,10 +256,25 @@ export function bigWidth(s, scale = 1, bold = true) { return (String(s).length *
 // chunky outlined text, the main display font
 export function big(s, x, y, color = '#fff', o = {}) {
   s = String(s).toUpperCase();
-  const scale = o.scale || 1, bold = o.bold !== false, adv = (bold ? 7 : 6) * scale, cw = bold ? 6 : 5;
+  const scale = o.scale || 1, bold = o.bold !== false;
   const wpx = bigWidth(s, scale, bold);
   if (o.align === 'center') x -= Math.floor(wpx / 2); else if (o.align === 'right') x -= wpx;
   x = Math.round(x); y = Math.round(y);
+  if (!s.trim()) return;
+  const key = s + '|' + color + '|' + scale + '|' + bold + '|' + o.outline + '|' + o.shadow;
+  let c = bigCacheText.get(key);
+  if (!c) {
+    if (bigCacheText.size > 600) bigCacheText.clear();
+    c = document.createElement('canvas'); c.width = wpx + 3; c.height = 8 * scale + 4;
+    const cx = c.getContext('2d'); cx.imageSmoothingEnabled = false;
+    withCtx(cx, () => bigRaw(s, 1, 1, color, o, scale, bold));
+    bigCacheText.set(key, c);
+  }
+  ctx.drawImage(c, x - 1, y - 1);
+}
+const bigCacheText = new Map();
+function bigRaw(s, x, y, color, o, scale, bold) {
+  const adv = (bold ? 7 : 6) * scale, cw = bold ? 6 : 5;
   const draw = (col, dx, dy) => { const a0 = bigAtlas(col, bold), a = hi(a0), k = a === a0 ? 1 : HI;
     for (let i = 0; i < s.length; i++) { const j = bidx[s[i]]; if (j === undefined || s[i] === ' ') continue;
       ctx.drawImage(a, j * cw * k, 0, cw * k, 7 * k, x + i * adv + dx, y + dy, cw * scale, 7 * scale); } };
@@ -264,11 +299,13 @@ const ICONS = {
 };
 export function icon(name, x, y, color = '#fff') {
   const g = ICONS[name]; if (!g) return;
-  for (let r = 0; r < 9; r++) for (let k = 0; k < 9; k++) {
-    const ch = g[r][k]; if (ch === '.') continue;
-    ctx.fillStyle = ch === 'y' ? '#ffd23f' : ch === 'h' ? color : ch === 'm' ? '#c0c0c0' : color;
-    ctx.fillRect(Math.round(x) + k, Math.round(y) + r, 1, 1);
-  }
+  ctx.drawImage(baked('icon' + name + color, 9, 9, () => {
+    for (let r = 0; r < 9; r++) for (let k = 0; k < 9; k++) {
+      const ch = g[r][k]; if (ch === '.') continue;
+      ctx.fillStyle = ch === 'y' ? '#ffd23f' : ch === 'm' ? '#c0c0c0' : color;
+      ctx.fillRect(k, r, 1, 1);
+    }
+  }), Math.round(x), Math.round(y));
 }
 
 // ---------- player sprites: fill art auto-outlined -> 10x16 ----------

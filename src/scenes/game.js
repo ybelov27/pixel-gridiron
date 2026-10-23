@@ -242,7 +242,9 @@ export class GameScene {
     rect(0, y0, W, ft - y0, m.night ? '#0e1030' : '#262a52');
     // crowd rows anchored to the world so they scroll with the field
     const off = Math.floor(this.camX * SX);
-    for (let row = 0; row < 3; row++) {
+    if (this.hype <= 0) {
+      G.ctx.drawImage(this.crowdImage(), -off, y0);
+    } else for (let row = 0; row < 3; row++) {
       for (let sxp = -3; sxp < W + 3; sxp += 3) {
         const col = Math.floor((sxp + off) / 3);
         const hsh = (col * 2654435761 + row * 97) >>> 0;
@@ -260,8 +262,9 @@ export class GameScene {
     rect(0, ft - 1, W, 1, '#0b0d1c');
     if (m.night) for (let x = 20; x < W; x += 90) { rect(x, y0, 8, 2, '#fffbe0'); rect(x - 2, y0 + 2, 12, 1, 'rgba(255,251,224,0.4)'); }
   }
-  drawField() {
-    const m = this.m, W = G.W, FT = this.FT, SY = this.SY, fb = this.fieldB;
+  // the static field (turf, lines, numbers, end zones, logos, posts) is baked into one image
+  drawFieldStatic(W) {
+    const m = this.m, FT = this.FT, SY = this.SY, fb = this.fieldB;
     const x0 = Math.floor(this.camX - this.half - 2), x1 = Math.ceil(this.camX + this.half + 2);
     const snow = m.weather === 'snow';
     for (let yd = Math.max(0, Math.floor(x0 / 5) * 5); yd < Math.min(120, x1); yd += 5) {
@@ -294,8 +297,9 @@ export class GameScene {
       }
       const ctx = G.ctx; ctx.save(); ctx.translate(cx, Math.round((FT + fb) / 2)); ctx.rotate(rot * Math.PI / 2);
       const room = FW * SY - 76;
-      const sc = bigWidth(t.name, 2) <= room ? 2 : 1;
-      big(t.name, 0, -Math.round(3.5 * sc), t.c2 === '#111111' ? '#fff' : t.c2, { align: 'center', scale: sc });
+      const label = bigWidth(t.city, 1) <= room ? t.city : t.abbr;
+      const sc = bigWidth(label, 2) <= room ? 2 : 1;
+      big(label, 0, -Math.round(3.5 * sc), t.c2 === '#111111' ? '#fff' : t.c2, { align: 'center', scale: sc });
       ctx.restore();
     }
     // midfield badge
@@ -318,6 +322,52 @@ export class GameScene {
         if (n !== 50) { const dir = v < 50 ? -1 : 1, ax = sx + dir * 11; for (let i = 0; i < 3; i++) rect(ax - dir * i, ty + 3 - i, 1, 1 + 2 * i, 'rgba(255,255,255,0.8)'); }
       }
     }
+    // goal posts (back line) with shadow
+    for (const gx of [0, 120]) {
+      const s = this.sx(gx), cy = this.sy(FW / 2);
+      if (s < -12 || s > W + 12) continue;
+      const lo = this.sy(FW / 2 - 3.1), hi = this.sy(FW / 2 + 3.1);
+      rect(s + 3, cy + 1, 6, 2, 'rgba(0,0,0,0.25)');
+      rect(s, cy - 16, 2, 16, '#ffd23f');
+      rect(s, lo - 16, 2, hi - lo + 2, '#ffd23f');
+      rect(s, lo - 32, 2, 16, '#ffd23f'); rect(s, hi - 32, 2, 16, '#ffd23f');
+    }
+  }
+  fieldImage() {
+    const m = this.m, key = [this.SY, m.weather, m.me.id, m.opp.id, m.userHome].join('|');
+    if (this._field && this._fieldKey === key) return this._field;
+    const w = 120 * SX + 2, h = Math.ceil(FW * this.SY) + 2;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const cx = cv.getContext('2d'); cx.imageSmoothingEnabled = false;
+    // pin the camera so world x=0 lands at 0 and the field top at 0 while baking
+    const keep = [this.camX, this.FT, this.half, this.shx, this.shy, this.fieldB];
+    this.camX = G.W / 2 / SX; this.FT = 0; this.half = 200; this.shx = 0; this.shy = 0; this.fieldB = FW * this.SY;
+    G.withCtx(cx, () => this.drawFieldStatic(w));
+    [this.camX, this.FT, this.half, this.shx, this.shy, this.fieldB] = keep;
+    this._field = cv; this._fieldKey = key;
+    return cv;
+  }
+  // the idle crowd, baked into one strip (when the crowd is jumping it is drawn live)
+  crowdImage() {
+    const key = this.m.night ? 'n' : 'd';
+    if (this._crowd && this._crowdKey === key) return this._crowd;
+    const w = 120 * SX + 2 * G.W + 12, cv = document.createElement('canvas'); cv.width = w; cv.height = 11;
+    const cx = cv.getContext('2d');
+    G.withCtx(cx, () => {
+      for (let row = 0; row < 3; row++) for (let col = 0; col * 3 < w; col++) {
+        const hsh = (col * 2654435761 + row * 97) >>> 0;
+        if (hsh % 7 === 0) continue;
+        rect(col * 3, 1 + row * 3, 2, 2, CROWD[hsh % CROWD.length]);
+        if (this.m.night && row === 0 && hsh % 11 === 0) px(col * 3, row * 3, '#fff');
+      }
+    });
+    this._crowd = cv; this._crowdKey = key;
+    return cv;
+  }
+  drawField() {
+    const m = this.m, W = G.W, FT = this.FT, SY = this.SY, fb = this.fieldB;
+    const snow = m.weather === 'snow';
+    G.ctx.drawImage(this.fieldImage(), this.sx(0), FT);
     rect(0, FT - 1, W, 1, '#fff'); rect(0, fb, W, 1, '#fff');
     // sideline below the field
     rect(0, fb + 1, W, SIDE_H, snow ? '#7d9c86' : '#256f30');
@@ -346,16 +396,6 @@ export class GameScene {
       if (qx < -4 || qx > W + 4) continue;
       rect(qx - 1, qy - 4, 3, 5, '#0b0d1c'); rect(qx, qy - 3, 1, 3, '#ff7a1a');
     }
-    // goal posts (back line) with shadow
-    for (const gx of [0, 120]) {
-      const s = this.sx(gx), cy = this.sy(FW / 2);
-      if (s < -12 || s > W + 12) continue;
-      const lo = this.sy(FW / 2 - 3.1), hi = this.sy(FW / 2 + 3.1);
-      rect(s + 3, cy + 1, 6, 2, 'rgba(0,0,0,0.25)');
-      rect(s, cy - 16, 2, 16, '#ffd23f');
-      rect(s, lo - 16, 2, hi - lo + 2, '#ffd23f');
-      rect(s, lo - 32, 2, 16, '#ffd23f'); rect(s, hi - 32, 2, 16, '#ffd23f');
-    }
     // scrimmage & first down markers
     if (m.phase !== 'opp' && m.phase !== 'kick' && !(m.play && m.play.mode === 'return')) {
       const los = this.sx(10 + m.ballYard);
@@ -376,32 +416,8 @@ export class GameScene {
   drawPlay(p) {
     const m = this.m;
     const jog = !p.started && this.formT > 0 ? Math.pow(this.formT / 0.7, 2) : 0;
-    // routes before the snap: dotted path, chevrons showing direction, arrowhead (or stop bar) at the end
-    if (!p.started && p.receivers && jog < 0.05) {
-      for (const r of p.receivers) {
-        if (!r.route || r.block) continue;
-        const col = r.run ? '#ffa300' : '#fff1e8';
-        const pts = [{ x: r.x, y: r.y }, ...r.route.slice(0, r.run ? 2 : undefined)];
-        const last = pts[pts.length - 1], prev = pts[pts.length - 2];
-        if (!r.stopAtEnd) { // extend in the final direction so the arrow shows where they keep running
-          const L = Math.hypot(last.x - prev.x, last.y - prev.y) || 1;
-          pts.push({ x: last.x + (last.x - prev.x) / L * 4, y: last.y + (last.y - prev.y) / L * 4 });
-        }
-        const sp = pts.map((q) => [this.sx(q.x), this.sy(q.y) - 2]);
-        let along = 0;
-        for (let i = 1; i < sp.length; i++) {
-          const [x0, y0] = sp[i - 1], [x1, y1] = sp[i];
-          line(x0, y0, x1, y1, col, 2, i);
-          const len = Math.hypot(x1 - x0, y1 - y0) || 1, ux = (x1 - x0) / len, uy = (y1 - y0) / len;
-          for (let d = 14 - (along % 14); d < len - 6; d += 14) chevron(x0 + ux * d, y0 + uy * d, ux, uy, col);
-          along += len;
-        }
-        const [ex, ey] = sp[sp.length - 1], [px0, py0] = sp[sp.length - 2];
-        const L = Math.hypot(ex - px0, ey - py0) || 1, ux = (ex - px0) / L, uy = (ey - py0) / L;
-        arrowHead(ex, ey, ux, uy, r.stopAtEnd ? '#ffec27' : col);
-        if (r.stopAtEnd) { for (let j = -3; j <= 3; j++) { rect(ex + ux * 2 - uy * j, ey + uy * 2 + ux * j, 1, 1, '#0b0d1c'); rect(ex + ux * 3 - uy * j, ey + uy * 3 + ux * j, 1, 1, '#ffec27'); } }
-      }
-    }
+    // routes before the snap (baked once per play: dotted paths, chevrons, arrowheads, stop bars)
+    if (!p.started && p.receivers && jog < 0.05) G.ctx.drawImage(this.routeImage(p), this.sx(0), this.FT);
     // aim preview
     if (this.g && this.g.kind === 'aim' && p.canThrow && p.canThrow()) {
       const dx = this.g.x0 - this.g.x, dy = this.g.y0 - this.g.y;
@@ -546,6 +562,44 @@ export class GameScene {
       default: { shadow(); put(spr(6), 0, Math.floor(t * 3) % 2); } // FIREWORKS: arms up while the sky lights up
     }
     if (e.star) starIcon(x - 2, y - 24, '#ffd23f');
+  }
+  drawRoutes(p) {
+    {
+      for (const r of p.receivers) {
+        if (!r.route || r.block) continue;
+        const col = r.run ? '#ffa300' : '#fff1e8';
+        const pts = [{ x: r.x, y: r.y }, ...r.route.slice(0, r.run ? 2 : undefined)];
+        const last = pts[pts.length - 1], prev = pts[pts.length - 2];
+        if (!r.stopAtEnd) { // extend in the final direction so the arrow shows where they keep running
+          const L = Math.hypot(last.x - prev.x, last.y - prev.y) || 1;
+          pts.push({ x: last.x + (last.x - prev.x) / L * 4, y: last.y + (last.y - prev.y) / L * 4 });
+        }
+        const sp = pts.map((q) => [this.sx(q.x), this.sy(q.y) - 2]);
+        let along = 0;
+        for (let i = 1; i < sp.length; i++) {
+          const [x0, y0] = sp[i - 1], [x1, y1] = sp[i];
+          line(x0, y0, x1, y1, col, 2, i);
+          const len = Math.hypot(x1 - x0, y1 - y0) || 1, ux = (x1 - x0) / len, uy = (y1 - y0) / len;
+          for (let d = 14 - (along % 14); d < len - 6; d += 14) chevron(x0 + ux * d, y0 + uy * d, ux, uy, col);
+          along += len;
+        }
+        const [ex, ey] = sp[sp.length - 1], [px0, py0] = sp[sp.length - 2];
+        const L = Math.hypot(ex - px0, ey - py0) || 1, ux = (ex - px0) / L, uy = (ey - py0) / L;
+        arrowHead(ex, ey, ux, uy, r.stopAtEnd ? '#ffec27' : col);
+        if (r.stopAtEnd) { for (let j = -3; j <= 3; j++) { rect(ex + ux * 2 - uy * j, ey + uy * 2 + ux * j, 1, 1, '#0b0d1c'); rect(ex + ux * 3 - uy * j, ey + uy * 3 + ux * j, 1, 1, '#ffec27'); } }
+      }
+    }
+  }
+  routeImage(p) {
+    if (p._routes && p._routesSY === this.SY) return p._routes;
+    const cv = document.createElement('canvas'); cv.width = 120 * SX + 2; cv.height = Math.ceil(FW * this.SY) + 2;
+    const cx = cv.getContext('2d'); cx.imageSmoothingEnabled = false;
+    const keep = [this.camX, this.FT, this.shx, this.shy];
+    this.camX = G.W / 2 / SX; this.FT = 0; this.shx = 0; this.shy = 0;
+    G.withCtx(cx, () => this.drawRoutes(p));
+    [this.camX, this.FT, this.shx, this.shy] = keep;
+    p._routes = cv; p._routesSY = this.SY;
+    return cv;
   }
   drawWeather() {
     const w = this.m.weather; if (w === 'clear') return;

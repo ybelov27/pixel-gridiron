@@ -10,6 +10,7 @@ import * as O from '../src/office.js';
 import { status, startSeason, simUserGame, simRound, finishUserGame, resumableGame } from '../src/flow.js';
 import { serialize, deserialize } from '../src/save.js';
 import { SONGS } from '../src/music.js';
+import { OLD_TEAMS, OLD_ABBR } from '../src/data.js';
 import { ACHIEVEMENTS, achCount, unlock } from '../src/achievements.js';
 
 let passed = 0;
@@ -260,6 +261,26 @@ test('achievements unlock once, pay CC, and survive a reload', () => {
   const c2 = deserialize(serialize(c));
   assert.deepEqual(Object.keys(c2.ach).sort(), Object.keys(c.ach).sort());
   console.log(`      after a season: ${achCount(c)}/${ACHIEVEMENTS.length}`);
+});
+test('league uses the real NFL cities in real divisions; old saves convert in place', () => {
+  const c = newCareer({ seed: 12, teamId: 13 });
+  assert.equal(c.teams[13].city, 'KANSAS CITY'); assert.equal(c.teams[18].city, 'GREEN BAY');
+  assert.equal(c.teams[13].conf, 0); assert.equal(c.teams[18].conf, 1);
+  assert.ok(c.teams.every((t) => !/CHIEFS|PACKERS|COWBOYS|PATRIOTS/.test(t.name)), 'no nicknames');
+  // fake an old fictional-league save
+  c.teams.forEach((t, i) => { t.city = OLD_TEAMS[i].split(' ').slice(0, -1).join(' '); t.name = OLD_TEAMS[i].split(' ').slice(-1)[0]; t.abbr = OLD_ABBR[i]; });
+  c.history.push({ year: 1, team: OLD_ABBR[13], w: 9, l: 7, t: 0, result: 'MISSED PLAYOFFS', champ: OLD_TEAMS[2], mvp: '-' });
+  c.coach.teams = [OLD_ABBR[13]]; delete c.leagueV;
+  const c2 = deserialize(serialize(c));
+  assert.equal(c2.teams[13].city, 'KANSAS CITY'); assert.equal(c2.teams[13].abbr, 'KC');
+  assert.equal(c2.history[0].team, 'KC'); assert.equal(c2.history[0].champ, 'CLEVELAND');
+  assert.deepEqual(c2.coach.teams, ['KC']);
+  assert.equal(c2.leagueV, 2);
+});
+test('dome teams never get weather or wind', () => {
+  const c = newCareer({ seed: 14, teamId: 17 }); startSeason(c); c.week = 14;
+  const g = c.schedule[c.week].find((x) => c.teams[x.h].dome);
+  for (let i = 0; i < 20; i++) { const m = new Match(c, g); assert.equal(m.weather, 'clear'); assert.equal(m.wind, 0); }
 });
 test('deserialize rejects garbage', () => {
   assert.throws(() => deserialize('{"hello":1}'));

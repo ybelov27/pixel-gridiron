@@ -1,6 +1,6 @@
 // League structure: career creation, schedule, standings, sims, playoffs, difficulty.
 import { RNG, clamp, lerp } from './rng.js';
-import { TEAM_DATA, COACH_FIRST, LAST } from './data.js';
+import { TEAM_DATA, COACH_FIRST, LAST, OLD_TEAMS, OLD_ABBR } from './data.js';
 import { makePlayer, buildLineup, unitRating, POSITIONS, SLOTS, makeRegularPlayer, TRAITS, CELEBS } from './players.js';
 
 export const WEEKS = 16;
@@ -56,6 +56,18 @@ export function migrateCareer(c) {
   const rng = rngOf(c);
   if (!c.regulars) c.regulars = genRegulars(rng);
   c.music ||= { owned: ['fanfare'], equipped: 'fanfare' };
+  // v2 league: the fictional clubs became the real NFL cities (same slots: ratings, records and schedule carry over)
+  if ((c.leagueV || 1) < 2) {
+    const oldName = c.teams.map((t) => `${t.city} ${t.name}`), oldAbbr = c.teams.map((t) => t.abbr);
+    c.teams.forEach((t, i) => { const d = TEAM_DATA[i]; Object.assign(t, { city: d[0], name: d[1], abbr: d[2], c1: d[3], c2: d[4], dome: !!d[5], cold: !!d[6] }); });
+    const byAbbr = (a) => { const i = OLD_ABBR.indexOf(a); return i >= 0 ? TEAM_DATA[i][2] : a; };
+    const byName = (n) => { const i = OLD_TEAMS.indexOf(n); return i >= 0 ? teamName(c.teams[i]) : n; };
+    c.coach.teams = c.coach.teams.map(byAbbr);
+    c.history.forEach((h) => { h.team = byAbbr(h.team); h.champ = byName(h.champ); });
+    c.news = c.news.map((n) => { let s = n; oldName.forEach((nm, i) => { s = s.split(nm).join(teamName(c.teams[i])); }); oldAbbr.forEach((ab, i) => { s = s.replace(new RegExp(`\\b${ab}\\b`, 'g'), c.teams[i].abbr); }); return s; });
+    c.leagueV = 2;
+    addNews(c, `THE LEAGUE NOW PLAYS IN THE REAL NFL CITIES - YOU COACH ${teamName(userTeam(c))}.`);
+  }
   const fix = (p) => { if (p && !p.trait && TRAITS[p.pos]) p.trait = rng.pick(TRAITS[p.pos])[0]; if (p && !p.celeb) p.celeb = rng.pick(CELEBS); };
   c.roster.forEach(fix);
   Object.values(c.regulars).flat().forEach((p) => { if (!p.celeb) p.celeb = rng.pick(CELEBS); }); (c.freeAgents || []).forEach(fix); (c.draft?.pool || []).forEach(fix);
@@ -73,10 +85,10 @@ export function newCareer(o) {
     facilities: { stadium: 2, training: 2, rehab: 2 },
     coords: { oc: null, dc: null }, coordPool: null,
     teams: [], userTeamId: o.teamId ?? 0, roster: [], schedule: [], playoffs: null,
-    news: [], history: [], freeAgents: [], draft: null, expiring: [], offers: null, pending: [], lastSummary: null,
+    leagueV: 2, news: [], history: [], freeAgents: [], draft: null, expiring: [], offers: null, pending: [], lastSummary: null,
   };
   c.teams = TEAM_DATA.map((d, i) => ({
-    id: i, city: d[0], name: d[1], abbr: d[2], c1: d[3], c2: d[4], conf: Math.floor(i / 16), div: Math.floor(i / 4) % 4,
+    id: i, city: d[0], name: d[1], abbr: d[2], c1: d[3], c2: d[4], dome: !!d[5], cold: !!d[6], conf: Math.floor(i / 16), div: Math.floor(i / 4) % 4,
     off: Math.round(rng.range(1.3, 2.9) * 10) / 10, def: Math.round(rng.range(1.3, 2.9) * 10) / 10, w: 0, l: 0, t: 0, pf: 0, pa: 0,
   }));
   if (o.random) c.userTeamId = rng.int(0, 31);
@@ -87,12 +99,12 @@ export function newCareer(o) {
   c.coach.teams.push(ut.abbr);
   c.schedule = genSchedule(rng);
   saveRng(c, rng);
-  addNews(c, `WELCOME, COACH ${c.coach.name}! THE ${ut.city} ${ut.name} ARE YOURS.`);
+  addNews(c, `WELCOME, COACH ${c.coach.name}! ${teamName(ut)} IS YOUR TEAM.`);
   return c;
 }
 export function addNews(c, s) { c.news.unshift(`Y${c.year} ` + s); if (c.news.length > 40) c.news.length = 40; }
 export const userTeam = (c) => c.teams[c.userTeamId];
-export const teamName = (t) => `${t.city} ${t.name}`;
+export const teamName = (t) => t.name ? `${t.city} ${t.name}` : t.city;
 
 export function genSchedule(rng) {
   const weeks = [];

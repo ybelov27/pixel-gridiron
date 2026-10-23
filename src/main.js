@@ -162,7 +162,10 @@ function frame(now) {
   if (dt > 0.25) dt = 0.25;
   acc += dt;
   while (input.queue.length) handle(input.queue.shift());
-  while (acc >= STEP) { acc -= STEP; step(); }
+  // catch up at most 4 steps per frame so a slow phone never spirals into stutter
+  let steps = 0;
+  while (acc >= STEP && steps < 4) { acc -= STEP; step(); steps++; }
+  if (acc > STEP * 4) acc = 0;
   render();
   requestAnimationFrame(frame);
 }

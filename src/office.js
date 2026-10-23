@@ -341,7 +341,7 @@ export function startOffseason(c) {
   if (res.title) c.coach.titles++;
   c.history.unshift({ year: c.year, team: t.abbr, w: t.w, l: t.l, t: t.t, result: res.text, champ: champ ? teamName(champ) : '-', mvp: awards[0][1] });
   c.seasonEnd = { res, awards, champ: champ ? teamName(champ) : '-' };
-  addNews(c, `${champ ? champ.city + ' ' + champ.name : '?'} WIN PIXEL BOWL ${c.year}!`);
+  addNews(c, `${champ ? teamName(champ) : '?'} WIN PIXEL BOWL ${c.year}!`);
   c.phase = 'offseason'; c.stage = 'awards';
 }
 export function jobReview(c) {
@@ -379,7 +379,7 @@ export function acceptOffer(c, teamId) {
   c.coords = { oc: null, dc: null };
   c.dyn = Math.min(c.dyn, 0);
   c.coach.teams.push(t.abbr);
-  addNews(c, `COACH ${c.coach.name} HIRED BY THE ${t.city} ${t.name}. (LEFT ${old.abbr})`);
+  addNews(c, `COACH ${c.coach.name} HIRED BY ${teamName(t)}. (LEFT ${old.abbr})`);
   c.offers = null;
   prepareResign(c, true);
 }

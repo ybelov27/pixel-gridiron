@@ -1,42 +1,43 @@
-// Invented league data: 32 fictional clubs, 2 conferences x 4 divisions.
-export const CONFS = ['EASTERN', 'WESTERN'];
-export const CONF_ABBR = ['EGC', 'WGC'];
+// League data: the 32 real NFL cities in their real conferences/divisions and colours.
+// Teams are labelled by city only (no nicknames or logos); the two-team cities carry their conference.
+export const CONFS = ['AMERICAN', 'NATIONAL'];
+export const CONF_ABBR = ['AFC', 'NFC'];
 export const DIVS = ['NORTH', 'SOUTH', 'EAST', 'WEST'];
-// [city, nickname, abbr, primary, secondary]
+// [city, tag, abbr, primary, secondary, dome, cold]
 export const TEAM_DATA = [
-  ['IRONPORT', 'ANVILS', 'IRN', '#5d6b7a', '#f2a541'],
-  ['BAYSIDE', 'BREAKERS', 'BAY', '#1f6fb2', '#f4f4f4'],
-  ['GRANITE FALLS', 'GOATS', 'GRF', '#7b5e3b', '#e8d8a8'],
-  ['NORTHVALE', 'OWLS', 'NVL', '#2b2d6e', '#d6b13a'],
-  ['SUNHAVEN', 'SCORCH', 'SUN', '#e55b13', '#ffe066'],
-  ['PINECREST', 'LUMBERJACKS', 'PIN', '#1e6b3c', '#c8a165'],
-  ['STORMRIDGE', 'BOLTS', 'STR', '#3a3a3a', '#ffd23f'],
-  ['LAKEMONT', 'LOONS', 'LKM', '#0f8b8d', '#f4f4f4'],
-  ['ASHFORD', 'FOXES', 'ASH', '#b23a2e', '#2b2b2b'],
-  ['SILVERTON', 'MINERS', 'SLV', '#8e9aaf', '#22223b'],
-  ['DUNMORE', 'DRAGONS', 'DUN', '#6a1b9a', '#7ed957'],
-  ['CRESTWOOD', 'KNIGHTS', 'CRW', '#14213d', '#e5e5e5'],
-  ['EMBER BAY', 'EMBERS', 'EMB', '#c1121f', '#fdf0d5'],
-  ['FROSTBURG', 'YETIS', 'FRB', '#a8dadc', '#1d3557'],
-  ['GOLDCOAST', 'MARLINS', 'GLD', '#00a6a6', '#f6ae2d'],
-  ['HIGHMARK', 'HAWKS', 'HMK', '#3d405b', '#e07a5f'],
-  ['JUNIPER', 'JACKALS', 'JUN', '#606c38', '#fefae0'],
-  ['KINGSBRIDGE', 'CROWNS', 'KBR', '#4a0e4e', '#ffc300'],
-  ['LOWELL POINT', 'LIGHTHOUSE', 'LWP', '#e63946', '#f1faee'],
-  ['MAPLE RIDGE', 'MOOSE', 'MPR', '#8c2f39', '#f2e8cf'],
-  ['NEW AVALON', 'TITANS', 'NAV', '#283618', '#dda15e'],
-  ['OAKHURST', 'ACORNS', 'OAK', '#99582a', '#ffe6a7'],
-  ['PORT ROWAN', 'PIRATES', 'PRW', '#111111', '#e0e0e0'],
-  ['QUARRY HILL', 'ROCKERS', 'QRY', '#6c757d', '#ff006e'],
-  ['RIVERTON', 'OTTERS', 'RIV', '#386641', '#a7c957'],
-  ['SALTMARSH', 'GATORS', 'SLT', '#2a9d8f', '#e9c46a'],
-  ['THORNBURY', 'THORNS', 'THB', '#7f1d1d', '#86efac'],
-  ['VALEMONT', 'VIPERS', 'VAL', '#16a34a', '#111111'],
-  ['WESTGATE', 'WRANGLERS', 'WSG', '#b45309', '#1e3a8a'],
-  ['YELLOWROCK', 'BISON', 'YLR', '#ca8a04', '#3f2a14'],
-  ['COBALT CITY', 'COMETS', 'CBC', '#1d4ed8', '#f97316'],
-  ['REDMESA', 'RATTLERS', 'RDM', '#9a3412', '#fde68a'],
+  // AFC North
+  ['BALTIMORE', '', 'BAL', '#241773', '#9e7c0c', 0, 1], ['CINCINNATI', '', 'CIN', '#fb4f14', '#111111', 0, 1],
+  ['CLEVELAND', '', 'CLE', '#311d00', '#ff3c00', 0, 1], ['PITTSBURGH', '', 'PIT', '#1c1c1c', '#ffb612', 0, 1],
+  // AFC South
+  ['HOUSTON', '', 'HOU', '#03202f', '#a71930', 1, 0], ['INDIANAPOLIS', '', 'IND', '#002c5f', '#f4f4f4', 1, 0],
+  ['JACKSONVILLE', '', 'JAX', '#006778', '#d7a22a', 0, 0], ['TENNESSEE', '', 'TEN', '#0c2340', '#4b92db', 0, 0],
+  // AFC East
+  ['BUFFALO', '', 'BUF', '#00338d', '#c60c30', 0, 1], ['MIAMI', '', 'MIA', '#008e97', '#fc4c02', 0, 0],
+  ['NEW ENGLAND', '', 'NE', '#002244', '#c60c30', 0, 1], ['NEW YORK', 'AFC', 'NYA', '#125740', '#f4f4f4', 0, 1],
+  // AFC West
+  ['DENVER', '', 'DEN', '#fb4f14', '#002244', 0, 1], ['KANSAS CITY', '', 'KC', '#e31837', '#ffb81c', 0, 1],
+  ['LAS VEGAS', '', 'LV', '#1c1c1c', '#a5acaf', 1, 0], ['LOS ANGELES', 'AFC', 'LAA', '#0080c6', '#ffc20e', 1, 0],
+  // NFC North
+  ['CHICAGO', '', 'CHI', '#0b162a', '#c83803', 0, 1], ['DETROIT', '', 'DET', '#0076b6', '#b0b7bc', 1, 0],
+  ['GREEN BAY', '', 'GB', '#203731', '#ffb612', 0, 1], ['MINNESOTA', '', 'MIN', '#4f2683', '#ffc62f', 1, 0],
+  // NFC South
+  ['ATLANTA', '', 'ATL', '#a71930', '#1c1c1c', 1, 0], ['CAROLINA', '', 'CAR', '#0085ca', '#1c1c1c', 0, 0],
+  ['NEW ORLEANS', '', 'NO', '#d3bc8d', '#1c1c1c', 1, 0], ['TAMPA BAY', '', 'TB', '#d50a0a', '#34302b', 0, 0],
+  // NFC East
+  ['DALLAS', '', 'DAL', '#003594', '#869397', 1, 0], ['NEW YORK', 'NFC', 'NYN', '#0b2265', '#a71930', 0, 1],
+  ['PHILADELPHIA', '', 'PHI', '#004c54', '#a5acaf', 0, 1], ['WASHINGTON', '', 'WAS', '#5a1414', '#ffb612', 0, 1],
+  // NFC West
+  ['ARIZONA', '', 'ARI', '#97233f', '#f4f4f4', 1, 0], ['LOS ANGELES', 'NFC', 'LAN', '#003594', '#ffa300', 1, 0],
+  ['SAN FRANCISCO', '', 'SF', '#aa0000', '#b3995d', 0, 0], ['SEATTLE', '', 'SEA', '#002244', '#69be28', 0, 0],
 ];
+// the fictional league older saves were created with (same order), so careers can be converted in place
+export const OLD_TEAMS = ['IRONPORT ANVILS', 'BAYSIDE BREAKERS', 'GRANITE FALLS GOATS', 'NORTHVALE OWLS', 'SUNHAVEN SCORCH', 'PINECREST LUMBERJACKS',
+  'STORMRIDGE BOLTS', 'LAKEMONT LOONS', 'ASHFORD FOXES', 'SILVERTON MINERS', 'DUNMORE DRAGONS', 'CRESTWOOD KNIGHTS', 'EMBER BAY EMBERS',
+  'FROSTBURG YETIS', 'GOLDCOAST MARLINS', 'HIGHMARK HAWKS', 'JUNIPER JACKALS', 'KINGSBRIDGE CROWNS', 'LOWELL POINT LIGHTHOUSE', 'MAPLE RIDGE MOOSE',
+  'NEW AVALON TITANS', 'OAKHURST ACORNS', 'PORT ROWAN PIRATES', 'QUARRY HILL ROCKERS', 'RIVERTON OTTERS', 'SALTMARSH GATORS', 'THORNBURY THORNS',
+  'VALEMONT VIPERS', 'WESTGATE WRANGLERS', 'YELLOWROCK BISON', 'COBALT CITY COMETS', 'REDMESA RATTLERS'];
+export const OLD_ABBR = ['IRN', 'BAY', 'GRF', 'NVL', 'SUN', 'PIN', 'STR', 'LKM', 'ASH', 'SLV', 'DUN', 'CRW', 'EMB', 'FRB', 'GLD', 'HMK', 'JUN', 'KBR',
+  'LWP', 'MPR', 'NAV', 'OAK', 'PRW', 'QRY', 'RIV', 'SLT', 'THB', 'VAL', 'WSG', 'YLR', 'CBC', 'RDM'];
 export const FIRST = ['JAX','TREY','MARCUS','DEVON','KOFI','LIAM','NOAH','ELI','MILES','OWEN','RICO','DANTE','BEAU','CALEB','TATE',
   'ZEKE','JALEN','ANDRE','COLE','REID','SAMIR','THEO','IKE','HUGO','LEVI','NICO','OMAR','PAX','QUINN','RAFE','SETH','TY','VAN','WADE',
   'XAVI','YUSUF','ZANE','BRODY','CHASE','DARIUS','EMRYS','FINN','GRADY','HOLT','IVAN','JUDE','KAI','LANDO','MAX','NATE','ROMAN','SILAS','TOBIAS',

@@ -68,9 +68,11 @@ export class Match {
     this.wind = Math.round(this.rng.range(-12, 12));
     // weather & kickoff time: cold-weather home teams get snow late in the season
     const home = c.teams[game.h];
-    const cold = ['IRONPORT', 'NORTHVALE', 'STORMRIDGE', 'FROSTBURG', 'KINGSBRIDGE', 'MAPLE RIDGE', 'YELLOWROCK', 'SILVERTON', 'CRESTWOOD'].includes(home.city);
+    // domes: no weather or wind; cold-weather cities get snow late in the season; Seattle gets its rain
     const late = c.phase === 'playoffs' || c.week >= 10;
-    this.weather = cold && late && this.rng.chance(0.55) ? 'snow' : this.rng.chance(0.14) ? 'rain' : 'clear';
+    const rainy = home.abbr === 'SEA' ? 0.35 : 0.14;
+    this.weather = home.dome ? 'clear' : home.cold && late && this.rng.chance(0.55) ? 'snow' : this.rng.chance(rainy) ? 'rain' : 'clear';
+    if (home.dome) this.wind = 0;
     this.night = this.rng.chance(c.phase === 'playoffs' ? 0.6 : 0.33);
     this.phase = 'msg'; this.msg = ''; this.timer = 0; this.next_ = null;
     this.ot = null; this.runoff = 0; this.conv = false; this.play = null; this.kick = null;
