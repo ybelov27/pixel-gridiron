@@ -288,6 +288,12 @@ test('new game and career trophies unlock from their feats', () => {
   checkGame(c, { us: 52, them: 49, ot: false, feats: f });
   for (const id of ['long_td80', 'td8', 'pts50', 'yds600', 'rec275', 'rb175', 'fg55', 'onside', 'walkoff', 'no_int', 'no_punt', 'snow_win', 'night_win'])
     assert.ok(c.ach[id], `${id} should unlock`);
+  // QB / receiver / runner records
+  const c3 = newCareer({ seed: 64, teamId: 5 }); startSeason(c3);
+  checkGame(c3, { us: 49, them: 10, ot: false, feats: { qbRunTD: 44, longPassTD: 96, passYds: 470, passTD: 8, patt: 12, pcmp: 12, recTDBest: 5, rushTDBest: 3 } });
+  for (const id of ['qb_run_td', 'qb_run40', 'pass_td85', 'pass_td95', 'pass450', 'td8pass', 'surgeon', 'rec_td5', 'rush_td3']) assert.ok(c3.ach[id], `${id} should unlock`);
+  const qb = c3.roster.find((p) => p.pos === 'QB');
+  if (qb) { qb.season.ptd = 61; qb.career.ptd = 150; checkCareer(c3); assert.ok(c3.ach.qb_ptd60 && c3.ach.qb_career150); }
   // a simulated game has no feats: none of the "played it yourself" trophies may unlock from it
   const c2 = newCareer({ seed: 63, teamId: 3 }); startSeason(c2);
   checkGame(c2, { us: 21, them: 7, ot: false });

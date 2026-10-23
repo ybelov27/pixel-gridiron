@@ -57,6 +57,21 @@ export const ACHIEVEMENTS = [
   ['seasons5', 'LIFER', 'COACH 5 FULL SEASONS', 6],
   ['bank100', 'MONEY BAGS', 'HOLD 100 CC AT ONCE', 4],
   ['all_fac', 'PALACE', 'GET ALL THREE FACILITIES TO 5 STARS', 10],
+  ['qb_run_td', 'SCRAMBLE DRILL', 'YOUR QB RUNS IN A TOUCHDOWN', 3],
+  ['qb_run40', 'DUAL THREAT', 'YOUR QB SCORES ON A 40+ YARD RUN', 6],
+  ['pass_td85', 'DEEP SHOT', 'THROW AN 85+ YARD TOUCHDOWN PASS', 6],
+  ['pass_td95', 'FULL LENGTH', 'THROW A 95+ YARD TOUCHDOWN PASS', 10],
+  ['pass450', 'AIR SHOW', 'PASS FOR 450+ YARDS IN A GAME', 7],
+  ['td8pass', 'AIR STRIKE', 'THROW 8 TOUCHDOWN PASSES IN A GAME', 8],
+  ['surgeon', 'SURGEON', 'COMPLETE 10+ PASSES IN A GAME WITHOUT AN INCOMPLETION', 8],
+  ['rec_td5', 'MONEY HANDS', 'ONE RECEIVER CATCHES 5 TOUCHDOWNS IN A GAME', 6],
+  ['rush_td3', 'GOAL LINE BACK', 'ONE RUNNER SCORES 3 RUSHING TOUCHDOWNS IN A GAME', 5],
+  ['qb_ptd60', 'AIR MAIL', 'A STAR QB THROWS 60 TOUCHDOWN PASSES IN A SEASON', 10],
+  ['qb_pyds5500', 'RECORD ARM', 'A STAR QB PASSES FOR 5,500 YARDS IN A SEASON', 10],
+  ['rb_1500', 'BELL COW', 'A STAR RUNNER GAINS 1,500 RUSHING YARDS IN A SEASON', 8],
+  ['wr_2000', 'BIG PLAY MACHINE', 'A STAR RECEIVER GAINS 2,000 YARDS IN A SEASON', 10],
+  ['wr_td25', 'END ZONE MAGNET', 'A STAR RECEIVER CATCHES 25 TOUCHDOWNS IN A SEASON', 8],
+  ['qb_career150', 'RECORD BOOK', 'A STAR QB THROWS 150 CAREER TOUCHDOWN PASSES', 12],
   ['collector', 'COLLECTOR', 'UNLOCK 25 ACHIEVEMENTS', 10],
   ['hof', 'HALL OF FAME', 'UNLOCK EVERY OTHER ACHIEVEMENT', 30],
 ];
@@ -99,6 +114,14 @@ function feats(c, f) {
   if ((f.rushBest || 0) >= 175) unlock(c, 'rb175');
   if ((f.fgLong || 0) >= 55) unlock(c, 'fg55');
   if (f.onside) unlock(c, 'onside');
+  if ((f.qbRunTD ?? -1) >= 0) unlock(c, 'qb_run_td');
+  if ((f.qbRunTD ?? -1) >= 40) unlock(c, 'qb_run40');
+  if ((f.longPassTD || 0) >= 85) unlock(c, 'pass_td85');
+  if ((f.longPassTD || 0) >= 95) unlock(c, 'pass_td95');
+  if ((f.passYds || 0) >= 450) unlock(c, 'pass450');
+  if ((f.passTD || 0) >= 8) unlock(c, 'td8pass');
+  if ((f.recTDBest || 0) >= 5) unlock(c, 'rec_td5');
+  if ((f.rushTDBest || 0) >= 3) unlock(c, 'rush_td3');
 }
 // after a played (or simmed) game. res.feats exists only for games you actually played
 export function checkGame(c, res) {
@@ -123,6 +146,7 @@ export function checkGame(c, res) {
   if ((f.rushYds || 0) >= 200) unlock(c, 'rush200');
   feats(c, { ...f, points: res.us });
   if (won && f.walkoffFG) unlock(c, 'walkoff');
+  if ((f.patt || 0) >= 10 && f.pcmp === f.patt) unlock(c, 'surgeon');
   if (won && res.feats && !f.ints && (f.passYds || 0) >= 350) unlock(c, 'no_int');
   if (won && res.feats && !f.punts && res.us >= 35) unlock(c, 'no_punt');
   if (won && f.snow) unlock(c, 'snow_win');
@@ -159,6 +183,14 @@ export function checkCareer(c) {
   if ((c.history || []).length >= 5) unlock(c, 'seasons5');
   if (c.cc >= 100) unlock(c, 'bank100');
   if (Object.values(c.facilities).every((v) => v >= 5)) unlock(c, 'all_fac');
+  // season and career stat lines of your star players
+  const best = (k, pos, of = 'season') => Math.max(0, ...c.roster.filter((p) => !pos || pos.includes(p.pos)).map((p) => (p[of] && p[of][k]) || 0));
+  if (best('ptd', ['QB']) >= 60) unlock(c, 'qb_ptd60');
+  if (best('pyds', ['QB']) >= 5500) unlock(c, 'qb_pyds5500');
+  if (best('ryds') >= 1500) unlock(c, 'rb_1500');
+  if (best('recyds') >= 2000) unlock(c, 'wr_2000');
+  if (best('rectd') >= 25) unlock(c, 'wr_td25');
+  if (best('ptd', ['QB'], 'career') >= 150) unlock(c, 'qb_career150');
   // meta trophies last, so they see everything unlocked above
   if (achCount(c) >= 25) unlock(c, 'collector');
   if (ACHIEVEMENTS.every((a) => a[0] === 'hof' || (c.ach || {})[a[0]])) unlock(c, 'hof');
