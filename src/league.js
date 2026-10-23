@@ -10,12 +10,12 @@ export const DIFFS = ['EASY', 'MEDIUM', 'HARD', 'EXTREME'];
 export const DIFF_MULT = { EASY: { cc: 0.75, xp: 0.9 }, MEDIUM: { cc: 1, xp: 1 }, HARD: { cc: 1.5, xp: 1.15 }, EXTREME: { cc: 2, xp: 1.3 } };
 // per-difficulty knobs, interpolated by continuous level (difficulty + dynamic offset)
 const DK = {
-  sim: [-0.06, 0.05, 0.08, 0.12],    // opponent drive strength
-  assist: [0.85, 0.6, 0.35, 0.1],    // throw aim assist
-  react: [0.08, -0.05, -0.08, -0.1], // defender reaction delay delta (s)
-  spd: [-0.4, 0.45, 0.7, 0.95],      // defender speed delta (yd/s)
-  contest: [-0.08, 0.06, 0.1, 0.15], // contested-catch / tackle edge for defense
-  cpu: [-0.3, 0, 0.25, 0.5],       // CPU team rating bonus vs user
+  sim: [-0.06, 0.05, 0.07, 0.1],      // opponent drive strength
+  assist: [0.85, 0.6, 0.35, 0.1],     // throw aim assist
+  react: [0.08, -0.05, -0.06, -0.08], // defender reaction delay delta (s)
+  spd: [-0.4, 0.45, 0.55, 0.75],      // defender speed delta (yd/s)
+  contest: [-0.08, 0.06, 0.08, 0.12], // contested-catch / tackle edge for defense
+  cpu: [-0.3, 0, 0.25, 0.5],          // CPU team rating bonus vs user
 };
 export function diffLevel(c) {
   const base = DIFFS.indexOf(c.settings.difficulty);

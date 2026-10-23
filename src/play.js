@@ -342,9 +342,20 @@ export class PlaySim {
       const ty = deep ? (deep.y + this.by) / 2 : this.by;
       this.moveTo(d, tx, ty, d.spd * 0.9, dt);
     } else {
-      // zone / spy underneath
-      const tx = this.los + (d.role === 'LB' ? 5 : 8);
-      this.moveTo(d, tx, d.y + (qb.y - d.y) * 0.5, d.spd * 0.6, dt);
+      // underneath zone: guard an area, and pick up whichever route runner enters it by sitting in his throwing lane
+      if (d.zoneY === undefined) d.zoneY = d.y;
+      const zx = this.los + (d.role === 'LB' ? 6 : 9), zy = d.zoneY + (qb.y - d.zoneY) * 0.25;
+      let best = null, bd = 9;
+      for (const r of this.receivers) {
+        if (r.block || r.run || r.x < this.los - (r.role === 'RB' || r.role === 'TE' ? 7 : 0) || r.x > zx + 9) continue; // backs count too: no free check-downs
+        const dd = Math.hypot(r.x - zx, r.y - zy);
+        if (dd < bd) { bd = dd; best = r; }
+      }
+      if (best) {
+        const L = Math.hypot(qb.x - best.x, qb.y - best.y) || 1;
+        const tx = Math.max(this.los + 2, best.x + (qb.x - best.x) / L * 1.6), ty = best.y + (qb.y - best.y) / L * 1.6;
+        this.moveTo(d, tx, clamp(ty, 1, FW - 1), d.spd * 0.95, dt);
+      } else this.moveTo(d, zx, zy, d.spd * 0.6, dt);
     }
   }
   // team pursuit: the closest few attack the ball, the rest keep their lanes and close gradually,
@@ -357,35 +368,50 @@ export class PlaySim {
     }
     if (d.lane === undefined) d.lane = d.y;
     const dd = dist(d, c);
-    if ((d.rank ?? 0) < 3 || dd < 4) return this.pursue(d, c, dt);
+    // pursuit effort: chasing the ball carrier, defenders run flat out (a touch above their cruising speed)
+    if ((d.rank ?? 0) < 3 || dd < 4) return this.pursue(d, c, dt, 1.08);
     const lead = clamp(dd / d.spd * 1.15, 0, 1.6);
     let tx = c.x + c.vx * lead, ty = c.y + c.vy * lead;
     const keep = clamp((dd - 4) / 14, 0, 0.7);            // far away: hold the lane; close: converge
     ty += (d.lane - ty) * keep;
     if (d.role === 'S' || d.role === 'CB') tx = Math.max(tx, c.x + Math.min(10, dd * 0.6)); // stay in front
-    this.moveTo(d, tx, clamp(ty, 1, FW - 1), d.spd, dt);
+    this.moveTo(d, tx, clamp(ty, 1, FW - 1), d.spd * 1.04, dt);
   }
   pursue(d, c, dt, mult = 1) {
-    const dd = dist(d, c);
-    const lead = clamp(dd / d.spd * 1.15, 0, 1.6); // take an angle: aim where the runner will be
-    this.moveTo(d, c.x + c.vx * lead, c.y + c.vy * lead, d.spd * mult, dt);
+    // run to the earliest point where we can meet the runner (solve |c + v t - d| = speed * t);
+    // if he is pulling away there is no such point, so chase him straight down
+    const sp = d.spd * mult, rx = c.x - d.x, ry = c.y - d.y, vx = c.vx, vy = c.vy;
+    const A = vx * vx + vy * vy - sp * sp, Bq = 2 * (rx * vx + ry * vy), C = rx * rx + ry * ry;
+    let t = -1;
+    if (Math.abs(A) < 1e-6) t = Bq < 0 ? -C / Bq : -1;
+    else { const disc = Bq * Bq - 4 * A * C; if (disc >= 0) { const q = Math.sqrt(disc), t1 = (-Bq - q) / (2 * A), t2 = (-Bq + q) / (2 * A); t = Math.min(...[t1, t2].filter((x) => x > 0), Infinity); if (t === Infinity) t = -1; } }
+    const lead = t > 0 ? Math.min(t, 2.5) : 0;
+    this.moveTo(d, c.x + vx * lead, c.y + vy * lead, sp, dt);
   }
+
   lineUpdate(d, dt) {
     const ol = d.ol;
     if (d.engaged) {
       const target = this.carrier || this.QB;
       const pushing = this.t > 0.25;
-      if (pushing) d.pairX = Math.max(target.x + 1.2, d.pairX - 0.55 * dt);
-      ol.x = d.pairX - 0.45; d.x = d.pairX + 0.45; d.y += (ol.y - d.y) * Math.min(1, dt * 8);
+      // the pile only gets pushed back toward the passer; it never jumps forward to follow a ball carrier
+      if (pushing) d.pairX = Math.max(Math.min(d.pairX, target.x + 1.2), d.pairX - 0.55 * dt);
+      // once the ball is clearly past this block, shed it and chase
+      if (this.carrier && target.x > d.pairX + 1.5) { d.engaged = false; d.stun = 0.2; ol.vx = 0; return this.freeOL(); }
+      const k = Math.min(1, dt * 9); // ease into the block instead of snapping together at the snap
+      ol.x += (d.pairX - 0.45 - ol.x) * k; d.x += (d.pairX + 0.45 - d.x) * k; d.y += (ol.y - d.y) * Math.min(1, dt * 8);
       d.vx = -0.5; ol.vx = -0.5;
       // run plays: engaged DL can arm-tackle a carrier who runs past
       if (this.t >= d.hold) { d.engaged = false; d.stun = 0.15; ol.vx = 0; }
     } else if (ol) { this.moveTo(ol, ol.x, ol.y, 0, dt); }
+    this.freeOL(dt);
+  }
+  freeOL(dt = 0) {
     for (const o of this.OL) if (!this.DL.some((x) => x.ol === o)) {
       // center: help block nearest unblocked rusher
       const free = this.defs.find((x) => (x.rush || (x.role === 'DL' && !x.engaged)) && dist(x, o) < 3);
       if (free && !free.picked) { free.picked = true; free.stun = 0.8; }
-      if (!this.carrier) this.moveTo(o, Math.max(this.QB.x + 2, o.x - 0.3), o.y, 1, dt);
+      if (!this.carrier && dt) this.moveTo(o, Math.max(this.QB.x + 2, o.x - 0.3), o.y, 1, dt);
     }
   }
   // stamina: full speed for a couple of seconds (longer with STA), then the runner fades
@@ -654,7 +680,7 @@ export class PlaySim {
     for (const bl of this.blk) {
       const d = bl.target;
       if (!d) continue;
-      if (d.held && d.stun > 0) { bl.x = d.x - 0.7; bl.y += (d.y - bl.y) * Math.min(1, dt * 8); bl.vx = -0.3; continue; }
+      if (d.held && d.stun > 0) { bl.x += (d.x - 0.7 - bl.x) * Math.min(1, dt * 9); bl.y += (d.y - bl.y) * Math.min(1, dt * 8); bl.vx = -0.3; continue; }
       if (d.held && d.stun <= 0) { d.held = false; bl.target = null; continue; }
       this.moveTo(bl, d.x - 0.6, d.y, bl.spd * 0.95, dt);
       if (dist(bl, d) < 1.1) {
